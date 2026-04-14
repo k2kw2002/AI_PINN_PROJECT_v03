@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_metadata/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data & Checkpoints (large files)
+checkpoints/*.pt
+data/asm_luts/*.npz
+data/lt_results/*.json
+data/lt_results/*.npz
+data/lt_checkpoint/*.json
+data/fno_training/*.pt
+data/fno_training/*.npz
+experiments/*/
+
+# Environment
+.env
+.env.local
+
+# Node (frontend)
+node_modules/
+frontend/dist/

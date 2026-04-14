@@ -1,0 +1,38 @@
+# UDFPS PINN Platform - Phase C Dependencies
+# Install: pip install -r requirements.txt
+
+# Core ML
+torch>=2.0.0
+numpy>=1.24.0
+
+# Physics
+tmm>=0.1.8                # Transfer Matrix Method
+
+# Visualization
+matplotlib>=3.7.0
+
+# Jupyter
+jupyter>=1.0.0
+jupyterlab>=4.0.0
+ipywidgets>=8.0.0
+
+# Configuration
+pyyaml>=6.0
+pydantic>=2.0.0
+
+# Testing
+pytest>=7.0.0
+
+# Utilities
+scipy>=1.10.0
+tqdm>=4.65.0
+
+# Phase D (install when needed)
+# botorch>=0.9.0
+# gpytorch>=1.10.0
+# neuraloperator>=0.2.0
+
+# Phase E (install when needed)
+# fastapi>=0.100.0
+# uvicorn>=0.23.0
+# httpx>=0.24.0

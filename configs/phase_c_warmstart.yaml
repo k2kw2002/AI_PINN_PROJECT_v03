@@ -1,0 +1,36 @@
+# Phase C Warm Start Config
+# v6 Section 7.5: Initialize with single-angle solution
+
+model:
+  hidden_dim: 128
+  num_layers: 4
+  num_freqs: 48
+  omega_0: 30.0
+
+warmstart:
+  enabled: true
+  theta_fixed: 0.0     # Start with normal incidence
+  epochs: 5000
+  output: checkpoints/phase_c_warmstart.pt
+
+training:
+  lr: 1.0e-4
+  n_colloc: 10000
+  device: cuda
+
+loss_weights:
+  lambda_H: 1.0
+  lambda_phase: 0.5
+  lambda_BC: 0.5
+  lambda_I: 0.0         # No intensity in warm start
+
+domain:
+  x_min: 0.0
+  x_max: 504.0
+  z_min: 0.0
+  z_max: 40.0
+
+physics:
+  wavelength_nm: 520
+  k_um: 18.37
+  n_medium: 1.52
