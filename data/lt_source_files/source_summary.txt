@@ -1,0 +1,23 @@
+TMM+ASM Custom Source Files for LightTools
+==================================================
+
+Usage in LightTools:
+  1. Insert > Source > Grid Source (or File Source)
+  2. Position: z = 40 um
+  3. Import file: source_theta+XX.X.txt
+  4. Set angle: Tilt X = theta
+
+Physical setup:
+  - NO AR coating needed in LT model
+  - NO Cover Glass needed in LT model
+  - Only: Source(z=40) > BM2 > ILD > BM1 > Encap > OPD
+
+Files generated: 8
+  theta=  +0.0 deg  I_mean=0.650070
+  theta= +10.0 deg  I_mean=0.645804
+  theta= +15.0 deg  I_mean=0.640099
+  theta= +20.0 deg  I_mean=0.631217
+  theta= +25.0 deg  I_mean=0.618588
+  theta= +30.0 deg  I_mean=0.601360
+  theta= +35.0 deg  I_mean=0.578793
+  theta= +40.0 deg  I_mean=0.550101
