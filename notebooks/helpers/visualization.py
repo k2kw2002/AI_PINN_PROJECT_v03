@@ -332,3 +332,325 @@ def plot_pipeline(figsize=(14, 3.5)):
 
     plt.tight_layout()
     return fig, ax
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 4. PINN Network Architecture (v6 Section 5)
+# ═══════════════════════════════════════════════════════════════════
+
+def plot_pinn_architecture(figsize=(14, 6)):
+    """Plot PINN network architecture diagram.
+
+    v6 Section 5.2: 8D Input -> Fourier -> SIREN -> 2D Output
+    """
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlim(-1, 18)
+    ax.set_ylim(-1.5, 8)
+    ax.axis("off")
+    ax.set_title("Pure PINN Architecture (v6 Section 5)", fontsize=14, fontweight="bold")
+
+    def _box(x, y, w, h, label, sublabel, color, fontsize=9):
+        box = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.1",
+                             facecolor=color, edgecolor="white", lw=1.5, alpha=0.9)
+        ax.add_patch(box)
+        ax.text(x + w/2, y + h*0.62, label, ha="center", va="center",
+                fontsize=fontsize, fontweight="bold", color="white")
+        if sublabel:
+            ax.text(x + w/2, y + h*0.25, sublabel, ha="center", va="center",
+                    fontsize=7, color="white", alpha=0.85)
+
+    def _arrow(x1, y, x2):
+        ax.annotate("", xy=(x2, y), xytext=(x1, y),
+                    arrowprops=dict(arrowstyle="-|>", color="#555", lw=1.5))
+
+    # Input (8D)
+    input_labels = ["x", "z", "δ₁", "δ₂", "w₁", "w₂", "sinθ", "cosθ"]
+    for i, lbl in enumerate(input_labels):
+        y = 7 - i * 0.85
+        ax.add_patch(FancyBboxPatch((0, y), 1.2, 0.65, boxstyle="round,pad=0.05",
+                                    facecolor="#78909C", edgecolor="white", lw=1))
+        ax.text(0.6, y + 0.32, lbl, ha="center", va="center", fontsize=8,
+                fontweight="bold", color="white")
+    ax.text(0.6, -0.5, "Input 8D", ha="center", fontsize=9, fontweight="bold", color="#555")
+
+    # Normalizer
+    _box(2, 1.5, 1.8, 4, "Input\nNorm", "x/504, z/40\nδ/10, ...", "#607D8B")
+    _arrow(1.3, 3.5, 2)
+
+    # Fourier Embedding
+    _box(4.5, 1.5, 2, 4, "Fourier\nEmbedding", "48 freq → 96D\nsin/cos(Bx)", "#FF7043")
+    _arrow(3.8, 3.5, 4.5)
+
+    # SIREN layers
+    siren_x = [7.2, 9.2, 11.2, 13.2]
+    for i, sx in enumerate(siren_x):
+        _box(sx, 1.5, 1.5, 4, f"SIREN\n#{i+1}", f"128→128\nsin(ω₀·Wx)", "#5C6BC0")
+        if i == 0:
+            _arrow(6.5, 3.5, sx)
+        else:
+            _arrow(siren_x[i-1] + 1.5, 3.5, sx)
+
+    # Output
+    _box(15.5, 2.3, 1.5, 2.5, "Linear\nOutput", "128→2", "#AB47BC")
+    _arrow(14.7, 3.5, 15.5)
+
+    # Output labels
+    out_labels = [("Re(U)", 4.2), ("Im(U)", 3.0)]
+    for lbl, y in out_labels:
+        ax.add_patch(FancyBboxPatch((17.3, y), 0.7, 0.7, boxstyle="round,pad=0.05",
+                                    facecolor="#CE93D8", edgecolor="white", lw=1))
+        ax.text(17.65, y + 0.35, lbl, ha="center", va="center", fontsize=7,
+                fontweight="bold", color="white")
+    ax.text(17.65, -0.5, "Output 2D", ha="center", fontsize=9, fontweight="bold", color="#555")
+    _arrow(17, 3.5, 17.3)
+
+    # Annotations
+    ax.text(0.6, 7.8, "v6 §5.1\nNO slit_dist!", ha="center", fontsize=7,
+            color=COLORS["pinn"], fontweight="bold")
+    ax.text(5.5, 0.7, "ω₀ = 30", ha="center", fontsize=8, color="#FF7043", style="italic")
+    ax.text(10.2, 0.7, "~100K params total", ha="center", fontsize=8,
+            color="#5C6BC0", style="italic")
+
+    plt.tight_layout()
+    return fig, ax
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 5. Loss Composition & Curriculum (v6 Section 6, 7)
+# ═══════════════════════════════════════════════════════════════════
+
+def plot_loss_and_curriculum(total_epochs=50000, figsize=(14, 8)):
+    """Plot loss composition and curriculum schedule."""
+    fig, axes = plt.subplots(2, 1, figsize=figsize, height_ratios=[1, 1.3])
+
+    # ── Top: Loss composition ──
+    ax = axes[0]
+    ax.set_xlim(-0.5, 16)
+    ax.set_ylim(-0.5, 3.5)
+    ax.axis("off")
+    ax.set_title("Loss Composition (v6 Section 6)", fontsize=13, fontweight="bold")
+
+    losses = [
+        ("L_Helmholtz", "∇²U + k²U = 0\nPDE residual", "#1565C0", "λ_H = 1.0\n(44%)", 0),
+        ("L_phase", "U(z=40) = U_ASM\nBM2 slit interior", "#C62828", "λ_ph = 0.5\n(22%)", 4),
+        ("L_BC", "U = 0 at BM\nz=20, z=40", "#2E7D32", "λ_BC = 0.5\n(22%)", 8),
+        ("L_I", "|U(z=0)|² = I_target\n(optional)", "#6A1B9A", "λ_I = 0.3\n(13%)", 12),
+    ]
+    for label, detail, color, weight, x in losses:
+        box = FancyBboxPatch((x, 0.3), 3.2, 2.5, boxstyle="round,pad=0.1",
+                             facecolor=color, edgecolor="white", lw=1.5, alpha=0.85)
+        ax.add_patch(box)
+        ax.text(x + 1.6, 2.2, label, ha="center", va="center",
+                fontsize=10, fontweight="bold", color="white")
+        ax.text(x + 1.6, 1.3, detail, ha="center", va="center",
+                fontsize=7, color="white", alpha=0.9)
+        ax.text(x + 1.6, 0.0, weight, ha="center", va="center",
+                fontsize=8, fontweight="bold", color=color)
+
+    ax.text(8, -0.5, "Rule: λ_H ≥ max(λ_phase, λ_BC, λ_I)",
+            ha="center", fontsize=9, fontweight="bold", color="#333",
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="#FFF9C4", edgecolor="#F9A825"))
+
+    # ── Bottom: Curriculum timeline ──
+    ax = axes[1]
+    s1 = int(total_epochs * 0.2)
+    s2 = int(total_epochs * 0.6)
+    epochs = np.arange(total_epochs)
+
+    lH = np.zeros(total_epochs)
+    lH[s1:s2] = np.linspace(0.1, 1.0, s2 - s1)
+    lH[s2:] = 1.0
+
+    ax.fill_between(epochs, 0, lH, alpha=0.3, color="#1565C0", label="λ_H (Helmholtz)")
+    ax.plot(epochs, lH, color="#1565C0", lw=2)
+    ax.plot(epochs, np.full(total_epochs, 0.5), color="#C62828", lw=1.5, ls="--", label="λ_phase")
+    ax.plot(epochs, np.full(total_epochs, 0.5), color="#2E7D32", lw=1.5, ls=":", label="λ_BC")
+
+    ax.axvline(x=s1, color="#FF6F00", lw=2)
+    ax.axvline(x=s2, color="#FF6F00", lw=2)
+
+    for cx, lbl in [(s1/2, "Stage 1\nBoundary"), ((s1+s2)/2, "Stage 2\nPDE Ramp"), ((s2+total_epochs)/2, "Stage 3\nFull")]:
+        ax.text(cx, 1.15, lbl, ha="center", fontsize=10, fontweight="bold", color="#FF6F00",
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+
+    ax.set_xlabel("Epoch", fontsize=11)
+    ax.set_ylabel("Loss Weight (λ)", fontsize=11)
+    ax.set_title("Curriculum 3-Stage Schedule (v6 Section 7)", fontsize=13, fontweight="bold")
+    ax.legend(loc="center right", fontsize=9)
+    ax.set_ylim(-0.05, 1.4)
+    ax.grid(True, alpha=0.2)
+
+    plt.tight_layout()
+    return fig, axes
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 6. End-to-End Data Flow (v6 Section 3, 10)
+# ═══════════════════════════════════════════════════════════════════
+
+def plot_data_flow(figsize=(16, 10)):
+    """Plot end-to-end data flow and system architecture."""
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlim(-1, 18)
+    ax.set_ylim(-0.5, 12)
+    ax.axis("off")
+    ax.set_title("End-to-End System Architecture & Data Flow",
+                 fontsize=14, fontweight="bold", pad=15)
+
+    def _box(x, y, w, h, label, sub, color, text_color="white"):
+        b = FancyBboxPatch((x, y), w, h, boxstyle="round,pad=0.12",
+                           facecolor=color, edgecolor="white", lw=1.5, alpha=0.9)
+        ax.add_patch(b)
+        ax.text(x+w/2, y+h*0.65, label, ha="center", va="center",
+                fontsize=9, fontweight="bold", color=text_color)
+        if sub:
+            ax.text(x+w/2, y+h*0.25, sub, ha="center", va="center",
+                    fontsize=6.5, color=text_color, alpha=0.85)
+
+    def _arr(x1, y1, x2, y2, color="#555"):
+        ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
+                    arrowprops=dict(arrowstyle="-|>", color=color, lw=1.5))
+
+    # ── Row 1: Forward Pipeline ──
+    y1 = 9.5
+    _box(0, y1, 2.2, 1.6, "Design\nVariables", "δ₁,δ₂,w₁,w₂ + θ", "#78909C")
+    _arr(2.2, y1+0.8, 2.8, y1+0.8)
+    _box(2.8, y1, 2, 1.6, "TMM", "AR t(θ),Δφ(θ)", COLORS["tmm"])
+    _arr(4.8, y1+0.8, 5.4, y1+0.8)
+    _box(5.4, y1, 2.2, 1.6, "ASM", "CG 550μm FFT", COLORS["asm"])
+    _arr(7.6, y1+0.8, 8.2, y1+0.8)
+    _box(8.2, y1, 2.2, 1.6, "PINN", "8D→U(x,z)", COLORS["pinn"])
+    _arr(10.4, y1+0.8, 11, y1+0.8)
+    _box(11, y1, 2, 1.6, "PSF", "7 OPD pixels", COLORS["psf"])
+    _arr(13, y1+0.8, 13.6, y1+0.8)
+    _box(13.6, y1, 2.5, 1.6, "Metrics", "MTF, skew, T", "#795548")
+
+    ax.text(9, y1+2, "Forward Pipeline (Phase C)", ha="center", fontsize=11,
+            fontweight="bold", color="#333")
+
+    # ── Row 2: Training Loop ──
+    y2 = 6
+    _box(0, y2, 2.5, 1.5, "ASM LUT", "incident_z40.npz", "#26A69A")
+    _box(3, y2, 2.5, 1.5, "Collocation\nSampler", "Hierarchical z", "#FF8A65", text_color="#333")
+    _box(6, y2, 3.5, 1.5, "Loss Function", "λ_H·L_H + λ_ph·L_ph\n+ λ_BC·L_BC", "#D32F2F")
+    _box(10.5, y2, 2.5, 1.5, "Optimizer", "Adam → L-BFGS\nCosineAnnealing", "#E65100", text_color="#333")
+    _box(14, y2, 2, 1.5, "Curriculum", "3-Stage λ", "#FF6F00", text_color="#333")
+
+    _arr(2.5, y2+0.75, 6, y2+0.75, "#26A69A")
+    _arr(5.5, y2+0.75, 6, y2+0.75, "#FF8A65")
+    _arr(9.5, y2+0.75, 10.5, y2+0.75, "#D32F2F")
+    _arr(14, y2+0.75, 13, y2+0.75, "#FF6F00")
+    _arr(11.75, y2+1.5, 9.3, y1, "#E65100")  # backprop to PINN
+
+    ax.text(9, y2+2, "Training Loop", ha="center", fontsize=11,
+            fontweight="bold", color="#333")
+
+    # ── Row 3: Outputs ──
+    y3 = 3
+    _box(0, y3, 2.5, 1.3, "Checkpoints", ".pt files", "#546E7A")
+    _box(3.5, y3, 2.5, 1.3, "Red Flag\nDetector", "Auto Phase B check", "#F44336")
+    _box(7, y3, 2.5, 1.3, "Experiment\nLogs", "JSON + .log", "#8D6E63")
+    _box(10.5, y3, 2.5, 1.3, "Monitor\nNotebook", "Live plots", "#7B1FA2")
+
+    ax.text(7, y3+1.8, "Validation & Monitoring", ha="center", fontsize=11,
+            fontweight="bold", color="#333")
+
+    # ── Row 4: Future Phases ──
+    y4 = 0.5
+    _box(0, y4, 3, 1.3, "FNO Surrogate", "PINN→FNO distill (Phase D)", "#00838F")
+    _box(4, y4, 3.5, 1.3, "BoTorch Optimizer", "qNEHVI reverse design (D)", "#00695C")
+    _box(8.5, y4, 3, 1.3, "Design Studio", "3-tab React UI (Phase E)", "#4527A0")
+    _arr(3, y4+0.65, 4, y4+0.65, "#00838F")
+    _arr(7.5, y4+0.65, 8.5, y4+0.65, "#00695C")
+
+    ax.text(7, y4+1.8, "Future: Inverse Design Platform (Phase D-E)", ha="center",
+            fontsize=11, fontweight="bold", color="#888")
+
+    plt.tight_layout()
+    return fig, ax
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 7. Design Variable Space (v6 Section 2.5)
+# ═══════════════════════════════════════════════════════════════════
+
+def plot_design_space(figsize=(12, 5)):
+    """Visualize the 4D design variable space and ranges."""
+    fig, axes = plt.subplots(1, 4, figsize=figsize)
+
+    params = [
+        ("δ_BM1", -10, 10, "μm", "BM1 offset\n(slit shift)", "#1565C0"),
+        ("δ_BM2", -10, 10, "μm", "BM2 offset\n(slit shift)", "#C62828"),
+        ("w₁", 5, 20, "μm", "BM1 aperture\n(slit width)", "#2E7D32"),
+        ("w₂", 5, 20, "μm", "BM2 aperture\n(slit width)", "#6A1B9A"),
+    ]
+
+    for ax, (name, lo, hi, unit, desc, color) in zip(axes, params):
+        ax.barh(0, hi - lo, left=lo, height=0.4, color=color, alpha=0.7,
+                edgecolor="white", lw=2)
+        ax.set_xlim(lo - 3, hi + 3)
+        ax.set_ylim(-1, 1.5)
+        ax.set_yticks([])
+        ax.set_xlabel(unit, fontsize=9)
+        ax.set_title(name, fontsize=13, fontweight="bold", color=color)
+        ax.text((lo + hi) / 2, -0.6, desc, ha="center", fontsize=7.5, color="#555")
+        ax.text(lo, 0.7, str(lo), ha="center", fontsize=9, fontweight="bold", color=color)
+        ax.text(hi, 0.7, str(hi), ha="center", fontsize=9, fontweight="bold", color=color)
+        ax.grid(True, alpha=0.15, axis="x")
+
+    fig.suptitle("Design Variable Space (v6 Section 2.5) — Phase C: 4D",
+                 fontsize=13, fontweight="bold")
+    plt.tight_layout()
+    return fig, axes
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 8. Project Structure (v6 Section 11.5)
+# ═══════════════════════════════════════════════════════════════════
+
+def plot_project_structure(figsize=(14, 7)):
+    """Visualize the 3-layer hybrid project structure."""
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_xlim(-0.5, 16)
+    ax.set_ylim(-1, 9)
+    ax.axis("off")
+    ax.set_title("Hybrid Project Structure (v6 Section 11.5)", fontsize=14, fontweight="bold")
+
+    # Layer boxes
+    layers = [
+        (0, "Layer 1: notebooks/", ["Jupyter (.ipynb)", "Rapid experiment & viz",
+         "Phase 1 workflow", "Executive reports"], "#FF7043", "Extract logic ->"),
+        (5.5, "Layer 2: backend/", ["Python modules (.py)", "Class/function defs",
+         "Reusable via import", "Test target (tests/)"], "#42A5F5", "Wrap as CLI/API ->"),
+        (11, "Layer 3: scripts/ + api/", ["CLI: GPU training, batch",
+         "FastAPI: production serve", "Docker: containerize", ""], "#66BB6A", None),
+    ]
+
+    for x, title, items, color, arrow in layers:
+        box = FancyBboxPatch((x, 5), 4.8, 3.5, boxstyle="round,pad=0.15",
+                             facecolor=color, edgecolor="white", lw=2, alpha=0.12)
+        ax.add_patch(box)
+        ax.text(x + 0.3, 8.1, title, fontsize=11, fontweight="bold", color=color)
+        for i, item in enumerate(items):
+            if item:
+                ax.text(x + 0.5, 7.3 - i * 0.5, f"• {item}",
+                        fontsize=8, color="#444", family="monospace")
+        if arrow:
+            ax.annotate("", xy=(x + 5.2, 6.75), xytext=(x + 4.9, 6.75),
+                        arrowprops=dict(arrowstyle="-|>", color=color, lw=2))
+
+    # Data stores
+    for label, desc, color, x in [("data/", "ASM LUT, LT results", "#78909C", 0.5),
+                                   ("configs/", "YAML settings", "#8D6E63", 4),
+                                   ("checkpoints/", "Models (.pt)", "#546E7A", 7.5),
+                                   ("experiments/", "Logs, red flags", "#795548", 11)]:
+        box = FancyBboxPatch((x, 1), 3, 1.2, boxstyle="round,pad=0.1",
+                             facecolor=color, edgecolor="white", lw=1, alpha=0.7)
+        ax.add_patch(box)
+        ax.text(x+1.5, 1.8, label, ha="center", fontsize=9, fontweight="bold", color="white")
+        ax.text(x+1.5, 1.25, desc, ha="center", fontsize=7, color="white", alpha=0.85)
+
+    ax.text(7.5, 0.5, "Data & Artifacts", ha="center", fontsize=10, fontweight="bold", color="#555")
+
+    plt.tight_layout()
+    return fig, ax
