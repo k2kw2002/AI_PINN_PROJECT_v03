@@ -28,6 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import numpy as np
 import torch
 import yaml
 
@@ -220,6 +221,19 @@ def train(config: dict, args):
                 f"S2=[{curriculum.stage1_end},{curriculum.stage2_end}], "
                 f"S3=[{curriculum.stage2_end},{tcfg['epochs']}]")
 
+    # ── L_I Dataset (optional, LightTools) ──
+    lt_dataset = None
+    lt_results_dir = ROOT / "data" / "lt_results"
+    lt_files = list(lt_results_dir.glob("sim_*.npz"))
+    if lt_files and ccfg["lambda_I"] > 0:
+        from backend.data.lighttools_runner import LTResultDataset
+        lt_dataset = LTResultDataset(str(lt_results_dir))
+        logger.info(f"L_I dataset loaded: {lt_dataset.n_samples} LightTools results")
+    elif ccfg["lambda_I"] > 0:
+        logger.warning("lambda_I > 0 but no LT results found. L_I will be skipped.")
+    else:
+        logger.info("L_I disabled (lambda_I = 0)")
+
     # ── Checkpoint dir ──
     ckpt_dir = ROOT / config["checkpoint"]["dir"]
     ckpt_dir.mkdir(parents=True, exist_ok=True)
@@ -227,7 +241,7 @@ def train(config: dict, args):
     rf_every = config["red_flag"]["check_every"]
 
     # ── Training loop ──
-    loss_history = {"total": [], "L_H": [], "L_phase": [], "L_BC": []}
+    loss_history = {"total": [], "L_H": [], "L_phase": [], "L_BC": [], "L_I": []}
     red_flag_history = []
     prev_stage = ""
 
@@ -257,10 +271,35 @@ def train(config: dict, args):
         L_ph = phase_loss(model, asm_lut, tcfg["n_phase"], device)
         L_bc = bm_boundary_loss(model, tcfg["n_bc"], device)
 
+        # L_I: intensity matching with LightTools data (Stage 3)
+        L_I = torch.tensor(0.0, device=device)
+        if weights["lambda_I"] > 0 and lt_dataset is not None:
+            import math as _math
+            idx = np.random.randint(0, lt_dataset.n_samples)
+            cfg_lt, x_lt, I_lt = lt_dataset.get_target(idx)
+            n_lt = len(x_lt)
+            sin_t = _math.sin(_math.radians(cfg_lt["theta_deg"]))
+            cos_t = _math.cos(_math.radians(cfg_lt["theta_deg"]))
+            coords_lt = torch.stack([
+                torch.from_numpy(x_lt).to(device),
+                torch.zeros(n_lt, device=device),
+                torch.full((n_lt,), cfg_lt["delta_bm1"], device=device),
+                torch.full((n_lt,), cfg_lt["delta_bm2"], device=device),
+                torch.full((n_lt,), cfg_lt["w1"], device=device),
+                torch.full((n_lt,), cfg_lt["w2"], device=device),
+                torch.full((n_lt,), sin_t, device=device),
+                torch.full((n_lt,), cos_t, device=device),
+            ], dim=1)
+            U_lt = model(coords_lt)
+            I_pinn = U_lt[:, 0] ** 2 + U_lt[:, 1] ** 2
+            I_target = torch.from_numpy(I_lt).to(device)
+            L_I = torch.mean((I_pinn - I_target) ** 2)
+
         L_total = (
             weights["lambda_H"] * L_H
             + weights["lambda_phase"] * L_ph
             + weights["lambda_BC"] * L_bc
+            + weights["lambda_I"] * L_I
         )
 
         optimizer.zero_grad()
@@ -273,6 +312,7 @@ def train(config: dict, args):
         loss_history["L_H"].append(L_H.item())
         loss_history["L_phase"].append(L_ph.item())
         loss_history["L_BC"].append(L_bc.item())
+        loss_history["L_I"].append(L_I.item())
 
         # Log every 100 epochs
         if epoch % 100 == 0 or epoch == tcfg["epochs"] - 1:
