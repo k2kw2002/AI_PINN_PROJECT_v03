@@ -55,6 +55,8 @@ def parse_args():
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--resume", type=str, default=None, help="Checkpoint to resume from")
     parser.add_argument("--tag", type=str, default="", help="Experiment tag")
+    parser.add_argument("--no-warmstart", action="store_true", help="Skip warm start")
+    parser.add_argument("--warmstart-epochs", type=int, default=None)
     return parser.parse_args()
 
 
@@ -91,6 +93,12 @@ def load_config(args) -> dict:
         },
         "red_flag": {
             "check_every": 500,
+        },
+        "warm_start": {
+            "enabled": True,
+            "epochs": 500,
+            "lr": 1e-3,
+            "n_points": 2000,
         },
     }
 
@@ -233,6 +241,35 @@ def train(config: dict, args):
         logger.warning("lambda_I > 0 but no LT results found. L_I will be skipped.")
     else:
         logger.info("L_I disabled (lambda_I = 0)")
+
+    # ── Warm Start (v6 Section 7.5.2) ──
+    ws_cfg = config.get("warm_start", {})
+    do_warmstart = ws_cfg.get("enabled", True) and not args.no_warmstart and not args.resume
+    if args.warmstart_epochs is not None:
+        ws_cfg["epochs"] = args.warmstart_epochs
+
+    if do_warmstart:
+        from backend.training.warm_start import warm_start
+        logger.info(f"Running Warm Start ({ws_cfg.get('epochs', 500)} epochs)...")
+        warm_start(
+            model, asm_lut,
+            epochs=ws_cfg.get("epochs", 500),
+            n_points=ws_cfg.get("n_points", 2000),
+            lr=ws_cfg.get("lr", 1e-3),
+            device=device,
+        )
+        # Save warm start checkpoint
+        ckpt_ws_path = ROOT / config["checkpoint"]["dir"] / "phase_c_warmstart.pt"
+        ckpt_ws_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save({"model_state_dict": model.state_dict(), "epoch": -1}, ckpt_ws_path)
+        logger.info(f"Warm start checkpoint saved: {ckpt_ws_path.name}")
+    else:
+        if args.resume:
+            logger.info("Warm start skipped (resuming from checkpoint)")
+        elif args.no_warmstart:
+            logger.info("Warm start skipped (--no-warmstart)")
+        else:
+            logger.info("Warm start disabled in config")
 
     # ── Checkpoint dir ──
     ckpt_dir = ROOT / config["checkpoint"]["dir"]

@@ -38,6 +38,12 @@ physics:
   k_um: 18.37
   n_medium: 1.52
 
+warm_start:
+  enabled: true
+  epochs: 500
+  lr: 1.0e-3
+  n_points: 5000
+
 checkpoint:
   save_every: 1000
   dir: checkpoints/
