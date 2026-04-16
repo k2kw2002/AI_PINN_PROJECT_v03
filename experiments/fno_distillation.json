@@ -1,8 +1,8 @@
 {
   "n_train": 9000,
   "n_val": 1000,
-  "best_val_loss": 0.0010170218301936984,
-  "inference_ms": 1.6417157649993896,
-  "val_rel_error_pct": 177.57479858398438,
-  "training_time_s": 3000.4865624904633
+  "best_val_loss": 0.04623793065547943,
+  "inference_ms": 8.57319974899292,
+  "val_rel_error_pct": 63.986061096191406,
+  "training_time_s": 690.859130859375
 }
