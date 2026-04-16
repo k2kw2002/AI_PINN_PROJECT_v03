@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UDFPS PINN Design Studio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+        .header { background: linear-gradient(135deg, #1565C0, #7B1FA2); color: white; padding: 20px 30px; }
+        .header h1 { font-size: 24px; }
+        .header p { font-size: 13px; opacity: 0.8; margin-top: 4px; }
+        .tabs { display: flex; gap: 0; background: #e0e0e0; }
+        .tab { padding: 12px 24px; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.2s; }
+        .tab:hover { background: #d0d0d0; }
+        .tab.active { background: white; border-bottom-color: #1565C0; color: #1565C0; }
+        .content { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
+        .panel { display: none; }
+        .panel.active { display: block; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h3 { margin-bottom: 12px; color: #1565C0; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .slider-group { margin-bottom: 12px; }
+        .slider-group label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 14px; }
+        .slider-group input[type=range] { width: 100%; }
+        .slider-group .value { float: right; font-weight: 400; color: #1565C0; }
+        .btn { padding: 10px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
+        .btn-primary { background: #1565C0; color: white; }
+        .btn-primary:hover { background: #0D47A1; }
+        .btn-secondary { background: #E0E0E0; color: #333; }
+        .result { margin-top: 16px; padding: 16px; background: #f8f8f8; border-radius: 6px; }
+        .result h4 { margin-bottom: 8px; }
+        .metric { display: inline-block; margin: 4px 8px 4px 0; padding: 6px 12px; background: #E3F2FD; border-radius: 4px; font-size: 13px; }
+        .metric .val { font-weight: 700; color: #1565C0; }
+        .psf-bar { display: inline-block; width: 40px; margin: 0 2px; text-align: center; vertical-align: bottom; }
+        .psf-bar .bar { background: #42A5F5; border-radius: 3px 3px 0 0; }
+        .psf-bar .label { font-size: 10px; color: #888; margin-top: 2px; }
+        .status { padding: 8px 16px; border-radius: 4px; margin: 8px 0; font-size: 13px; }
+        .status.ok { background: #E8F5E9; color: #2E7D32; }
+        .status.error { background: #FFEBEE; color: #C62828; }
+        .status.loading { background: #FFF3E0; color: #E65100; }
+        #psf-chart { height: 200px; display: flex; align-items: flex-end; justify-content: center; gap: 4px; padding: 10px; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>UDFPS PINN Design Studio</h1>
+        <p>BM Optical Inverse Design Platform | Phase E</p>
+    </div>
+
+    <div class="tabs">
+        <div class="tab active" onclick="showTab('inference')">PSF Inference</div>
+        <div class="tab" onclick="showTab('design')">Inverse Design</div>
+        <div class="tab" onclick="showTab('system')">System Status</div>
+    </div>
+
+    <div class="content">
+        <!-- Tab 1: PSF Inference -->
+        <div id="inference" class="panel active">
+            <div class="grid">
+                <div class="card">
+                    <h3>Design Parameters</h3>
+                    <div class="slider-group">
+                        <label>delta_BM1 <span class="value" id="d1-val">0.0</span> um</label>
+                        <input type="range" id="d1" min="-10" max="10" step="0.5" value="0" oninput="updateSlider('d1')">
+                    </div>
+                    <div class="slider-group">
+                        <label>delta_BM2 <span class="value" id="d2-val">0.0</span> um</label>
+                        <input type="range" id="d2" min="-10" max="10" step="0.5" value="0" oninput="updateSlider('d2')">
+                    </div>
+                    <div class="slider-group">
+                        <label>w1 (BM1 aperture) <span class="value" id="w1-val">10.0</span> um</label>
+                        <input type="range" id="w1" min="5" max="20" step="0.5" value="10" oninput="updateSlider('w1')">
+                    </div>
+                    <div class="slider-group">
+                        <label>w2 (BM2 aperture) <span class="value" id="w2-val">10.0</span> um</label>
+                        <input type="range" id="w2" min="5" max="20" step="0.5" value="10" oninput="updateSlider('w2')">
+                    </div>
+                    <div class="slider-group">
+                        <label>theta (angle) <span class="value" id="th-val">0</span> deg</label>
+                        <input type="range" id="th" min="0" max="40" step="1" value="0" oninput="updateSlider('th')">
+                    </div>
+                    <button class="btn btn-primary" onclick="runInference()">Predict PSF</button>
+                </div>
+                <div class="card">
+                    <h3>PSF Result</h3>
+                    <div id="psf-chart"></div>
+                    <div id="psf-metrics"></div>
+                    <div id="psf-status"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 2: Inverse Design -->
+        <div id="design" class="panel">
+            <div class="card">
+                <h3>Target Specifications</h3>
+                <div class="grid">
+                    <div class="slider-group">
+                        <label>MTF@ridge min <span class="value" id="mtf-val">0.60</span></label>
+                        <input type="range" id="mtf-min" min="0.1" max="0.95" step="0.05" value="0.60" oninput="updateSlider('mtf-min', 'mtf')">
+                    </div>
+                    <div class="slider-group">
+                        <label>Skewness max <span class="value" id="skew-val">0.10</span></label>
+                        <input type="range" id="skew-max" min="0.01" max="0.5" step="0.01" value="0.10" oninput="updateSlider('skew-max', 'skew')">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="runDesign()" id="design-btn">Run Inverse Design</button>
+                <div id="design-status"></div>
+                <div id="design-result"></div>
+            </div>
+        </div>
+
+        <!-- Tab 3: System -->
+        <div id="system" class="panel">
+            <div class="card">
+                <h3>System Health</h3>
+                <div id="health-info"></div>
+                <button class="btn btn-secondary" onclick="checkHealth()">Refresh</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = 'http://localhost:8000';
+
+        function showTab(name) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.getElementById(name).classList.add('active');
+            event.target.classList.add('active');
+        }
+
+        function updateSlider(id, valId) {
+            const el = document.getElementById(id);
+            const valEl = document.getElementById((valId || id) + '-val');
+            if (valEl) valEl.textContent = el.value;
+        }
+
+        async function runInference() {
+            const params = {
+                delta_bm1: parseFloat(document.getElementById('d1').value),
+                delta_bm2: parseFloat(document.getElementById('d2').value),
+                w1: parseFloat(document.getElementById('w1').value),
+                w2: parseFloat(document.getElementById('w2').value),
+                theta_deg: parseFloat(document.getElementById('th').value),
+            };
+            document.getElementById('psf-status').innerHTML = '<div class="status loading">Computing...</div>';
+
+            try {
+                const r = await fetch(`${API}/api/inference/psf`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({params}),
+                });
+                const d = await r.json();
+
+                // PSF bar chart
+                const labels = ['R','V','R','V(c)','R','V','R'];
+                const maxVal = Math.max(...d.psf_7) || 1;
+                let chart = '';
+                d.psf_7.forEach((v, i) => {
+                    const h = Math.max(2, (v / maxVal) * 150);
+                    const color = i === 3 ? '#EF5350' : '#42A5F5';
+                    chart += `<div class="psf-bar"><div class="bar" style="height:${h}px;background:${color}"></div><div class="label">${labels[i]}</div></div>`;
+                });
+                document.getElementById('psf-chart').innerHTML = chart;
+
+                // Metrics
+                document.getElementById('psf-metrics').innerHTML = `
+                    <div class="metric">MTF@ridge: <span class="val">${d.mtf_ridge.toFixed(3)}</span></div>
+                    <div class="metric">Skewness: <span class="val">${d.skewness.toFixed(3)}</span></div>
+                    <div class="metric">Throughput: <span class="val">${d.throughput.toFixed(6)}</span></div>
+                    <div class="metric">Inference: <span class="val">${d.inference_ms.toFixed(0)}ms</span></div>
+                `;
+                document.getElementById('psf-status').innerHTML = '<div class="status ok">Prediction complete</div>';
+            } catch(e) {
+                document.getElementById('psf-status').innerHTML = `<div class="status error">Error: ${e.message}. Is the API server running?</div>`;
+            }
+        }
+
+        async function runDesign() {
+            document.getElementById('design-status').innerHTML = '<div class="status loading">Running inverse design... (this may take a few minutes)</div>';
+            document.getElementById('design-btn').disabled = true;
+
+            try {
+                const r = await fetch(`${API}/api/design/run`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        spec: {mtf_ridge_min: parseFloat(document.getElementById('mtf-min').value), skewness_max: parseFloat(document.getElementById('skew-max').value)},
+                        n_iterations: 20,
+                    }),
+                });
+                const d = await r.json();
+                document.getElementById('design-status').innerHTML = `<div class="status ok">Complete in ${d.elapsed_sec.toFixed(0)}s (${d.n_evaluations} evaluations)</div>`;
+                document.getElementById('design-result').innerHTML = `
+                    <div class="result">
+                        <h4>Best Design</h4>
+                        <div class="metric">delta_BM1: <span class="val">${d.best.params.delta_bm1.toFixed(1)}</span> um</div>
+                        <div class="metric">delta_BM2: <span class="val">${d.best.params.delta_bm2.toFixed(1)}</span> um</div>
+                        <div class="metric">w1: <span class="val">${d.best.params.w1.toFixed(1)}</span> um</div>
+                        <div class="metric">w2: <span class="val">${d.best.params.w2.toFixed(1)}</span> um</div>
+                        <br>
+                        <div class="metric">MTF: <span class="val">${d.best.mtf_ridge.toFixed(3)}</span></div>
+                        <div class="metric">Skewness: <span class="val">${d.best.skewness.toFixed(3)}</span></div>
+                        <div class="metric">Throughput: <span class="val">${d.best.throughput.toFixed(3)}</span></div>
+                        <p style="margin-top:12px;font-size:13px;color:#888">Pareto front: ${d.pareto_front.length} candidates</p>
+                    </div>
+                `;
+            } catch(e) {
+                document.getElementById('design-status').innerHTML = `<div class="status error">Error: ${e.message}</div>`;
+            }
+            document.getElementById('design-btn').disabled = false;
+        }
+
+        async function checkHealth() {
+            try {
+                const r = await fetch(`${API}/api/health`);
+                const d = await r.json();
+                document.getElementById('health-info').innerHTML = `
+                    <div class="metric">Status: <span class="val">${d.status}</span></div>
+                    <div class="metric">PINN: <span class="val">${d.pinn_loaded ? 'Loaded' : 'Not loaded'}</span></div>
+                    <div class="metric">FNO: <span class="val">${d.fno_loaded ? 'Loaded' : 'Not loaded'}</span></div>
+                    <div class="metric">Parameters: <span class="val">${d.n_pinn_params.toLocaleString()}</span></div>
+                    <div class="metric">Device: <span class="val">${d.device}</span></div>
+                `;
+            } catch(e) {
+                document.getElementById('health-info').innerHTML = `<div class="status error">API server not running. Start with: uvicorn backend.api.main:app --port 8000</div>`;
+            }
+        }
+
+        // Auto-check on load
+        checkHealth();
+    </script>
+</body>
+</html>
