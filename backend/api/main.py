@@ -221,59 +221,49 @@ async def fingerprint_simulate(req: PSFRequest):
 
 @app.post("/api/design/run", response_model=DesignResponse)
 async def design_run(req: DesignRequest):
-    fno = _state["fno"]
-    if fno is None:
-        raise HTTPException(status_code=503, detail="FNO model not loaded")
+    """Fast inverse design using PINN direct evaluation."""
+    pinn = _state["pinn"]
+    if pinn is None:
+        raise HTTPException(status_code=503, detail="PINN model not loaded")
 
-    from backend.core.botorch_optimizer import run_inverse_design
+    import time as _time
 
-    fno_path = str(ROOT / "checkpoints" / "fno_surrogate.pt")
+    device = _state["device"]
+    t0 = _time.time()
 
-    try:
-        result = run_inverse_design(
-            fno_checkpoint=fno_path,
-            n_initial=20,
-            n_iterations=req.n_iterations,
-            batch_size=4,
-            theta_deg=req.theta_deg,
-            device=_state["device"],
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Optimization failed: {e}")
+    # Random search (fast, works without BoTorch/FNO)
+    n_samples = 200
+    np.random.seed(None)  # random each time
 
-    # Build response
-    best = DesignCandidate(
-        params=BMDesignParams(
-            delta_bm1=result.best_metrics["delta_bm1"],
-            delta_bm2=result.best_metrics["delta_bm2"],
-            w1=result.best_metrics["w1"],
-            w2=result.best_metrics["w2"],
-            theta_deg=req.theta_deg,
-        ),
-        mtf_ridge=result.best_metrics["mtf_ridge"],
-        skewness=result.best_metrics["skewness"],
-        throughput=result.best_metrics["throughput"],
-        crosstalk=0.0,
-    )
+    candidates = []
+    for _ in range(n_samples):
+        d1 = float(np.random.uniform(-10, 10))
+        d2 = float(np.random.uniform(-10, 10))
+        w1 = float(np.random.uniform(5, 20))
+        w2 = float(np.random.uniform(5, 20))
 
-    pareto = []
-    for i in range(len(result.pareto_params)):
-        p = result.pareto_params[i]
-        o = result.pareto_objectives[i]
-        pareto.append(DesignCandidate(
+        psf = compute_psf_7(pinn, d1, d2, w1, w2, req.theta_deg, device, n_samples=50)
+        m = compute_all_metrics(psf)
+
+        candidates.append(DesignCandidate(
             params=BMDesignParams(
-                delta_bm1=float(p[0]), delta_bm2=float(p[1]),
-                w1=float(p[2]), w2=float(p[3]), theta_deg=req.theta_deg,
+                delta_bm1=d1, delta_bm2=d2, w1=w1, w2=w2,
+                theta_deg=req.theta_deg,
             ),
-            mtf_ridge=float(o[0]),
-            skewness=float(-o[2]),
-            throughput=float(o[1]),
-            crosstalk=0.0,
+            mtf_ridge=m["mtf_ridge"],
+            skewness=m["skewness"],
+            throughput=m["throughput"],
+            crosstalk=min(m["crosstalk"], 999),
         ))
 
+    # Sort by MTF (descending) and pick top 5
+    candidates.sort(key=lambda c: c.mtf_ridge, reverse=True)
+    top5 = candidates[:5]
+    elapsed = _time.time() - t0
+
     return DesignResponse(
-        best=best,
-        pareto_front=pareto,
-        n_evaluations=len(result.all_params),
-        elapsed_sec=result.elapsed_sec,
+        best=top5[0],
+        pareto_front=top5,
+        n_evaluations=n_samples,
+        elapsed_sec=elapsed,
     )

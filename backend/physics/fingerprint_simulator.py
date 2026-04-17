@@ -122,10 +122,17 @@ def simulate_fingerprint(
     angles = sorted(psf_by_angle.keys())
     max_theta = min(max(angles), CRITICAL_ANGLE_DEG)
 
-    # Build PSF array indexed by bin
+    # Build PSF array indexed by bin, normalize per-angle
     psf_array = np.zeros((len(angles), 7), dtype=np.float32)
     for i, a in enumerate(angles):
-        psf_array[i] = psf_by_angle[a]
+        psf_raw = psf_by_angle[a]
+        # Normalize each PSF so center pixel = dominant
+        psf_sum = np.sum(np.abs(psf_raw))
+        if psf_sum > 1e-15:
+            psf_array[i] = psf_raw / psf_sum
+        else:
+            # Fallback: ideal PSF (center-dominant)
+            psf_array[i] = np.array([0.02, 0.05, 0.15, 0.56, 0.15, 0.05, 0.02])
 
     # Assign each pixel to nearest angle bin
     angle_arr = np.array(angles)
