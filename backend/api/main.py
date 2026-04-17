@@ -105,9 +105,6 @@ def _load_models():
 async def startup():
     _load_models()
 
-# Also load immediately for TestClient compatibility
-_load_models()
-
 
 # ── Health ──
 
@@ -161,7 +158,7 @@ async def fingerprint_simulate(req: PSFRequest):
 
     import base64, io
     from backend.physics.fingerprint_simulator import (
-        generate_sample_fingerprint, simulate_fingerprint, compute_image_quality,
+        load_fingerprint, simulate_fingerprint, compute_image_quality,
     )
     from backend.physics.psf_metrics import compute_psf_7
 
@@ -175,8 +172,8 @@ async def fingerprint_simulate(req: PSFRequest):
         psf = compute_psf_7(pinn, p.delta_bm1, p.delta_bm2, p.w1, p.w2, float(theta), device)
         psf_by_angle[float(theta)] = psf
 
-    # Generate sample fingerprint and simulate
-    fp_raw = generate_sample_fingerprint()
+    # Load real fingerprint image (417x417)
+    fp_raw = load_fingerprint()
     fp_sim = simulate_fingerprint(psf_by_angle, fp_raw)
     quality = compute_image_quality(fp_raw, fp_sim)
 

@@ -5,483 +5,269 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UDFPS PINN Design Studio</title>
     <style>
-        :root {
-            --primary: #1565C0;
-            --primary-dark: #0D47A1;
-            --accent: #7B1FA2;
-            --success: #2E7D32;
-            --warning: #E65100;
-            --danger: #C62828;
-            --bg: #f0f2f5;
-            --card: #ffffff;
-            --text: #333333;
-            --text-light: #888888;
-            --border: #e0e0e0;
-        }
+        :root { --pri:#1565C0; --pri2:#0D47A1; --acc:#7B1FA2; --ok:#2E7D32; --warn:#E65100; --bad:#C62828; --bg:#f0f2f5; --card:#fff; --txt:#333; --txtL:#888; --bdr:#e0e0e0; }
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
-
-        /* Header */
-        .header { background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; padding:24px 32px; display:flex; justify-content:space-between; align-items:center; }
-        .header h1 { font-size:22px; letter-spacing:-0.5px; }
-        .header .subtitle { font-size:12px; opacity:0.7; margin-top:2px; }
-        .header .status-badge { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; }
-        .status-online { background:rgba(255,255,255,0.2); }
-        .status-offline { background:rgba(255,0,0,0.3); }
-
-        /* Tabs */
-        .tabs { display:flex; background:white; border-bottom:1px solid var(--border); padding:0 20px; }
-        .tab { padding:14px 20px; cursor:pointer; font-weight:600; font-size:14px; color:var(--text-light); border-bottom:3px solid transparent; transition:all 0.2s; }
-        .tab:hover { color:var(--text); }
-        .tab.active { color:var(--primary); border-bottom-color:var(--primary); }
-
-        /* Layout */
-        .content { max-width:1400px; margin:20px auto; padding:0 20px; }
-        .panel { display:none; }
-        .panel.active { display:block; }
-        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-        .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
-        .grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; }
-
-        /* Card */
-        .card { background:var(--card); border-radius:12px; padding:24px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
-        .card h3 { font-size:16px; margin-bottom:16px; color:var(--primary); display:flex; align-items:center; gap:8px; }
-        .card h3 .icon { font-size:20px; }
-
-        /* Sliders */
-        .param-group { margin-bottom:16px; }
-        .param-label { display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; }
-        .param-label .name { font-weight:600; }
-        .param-label .val { color:var(--primary); font-weight:700; font-size:14px; }
-        input[type=range] { width:100%; height:6px; -webkit-appearance:none; appearance:none; background:#e0e0e0; border-radius:3px; outline:none; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--primary); cursor:pointer; }
-
-        /* Button */
-        .btn { padding:12px 28px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; transition:all 0.2s; }
-        .btn-primary { background:var(--primary); color:white; }
-        .btn-primary:hover { background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 4px 12px rgba(21,101,192,0.3); }
-        .btn-primary:disabled { background:#bbb; cursor:not-allowed; transform:none; box-shadow:none; }
-        .btn-sm { padding:8px 16px; font-size:12px; }
-
-        /* Metrics */
-        .metric-card { background:#f8f9fa; border-radius:8px; padding:16px; text-align:center; }
-        .metric-card .value { font-size:28px; font-weight:700; color:var(--primary); }
-        .metric-card .label { font-size:11px; color:var(--text-light); margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
-        .metric-card.good .value { color:var(--success); }
-        .metric-card.warn .value { color:var(--warning); }
-        .metric-card.bad .value { color:var(--danger); }
-
-        /* PSF Chart */
-        .psf-chart { display:flex; align-items:flex-end; justify-content:center; gap:6px; height:180px; padding:16px 0; }
-        .psf-bar-wrap { text-align:center; flex:1; max-width:60px; }
-        .psf-bar { border-radius:4px 4px 0 0; transition:height 0.3s; min-height:2px; }
-        .psf-bar-label { font-size:10px; color:var(--text-light); margin-top:4px; }
-        .psf-bar-val { font-size:9px; color:var(--text-light); margin-bottom:2px; }
-
-        /* Status */
-        .status-msg { padding:10px 16px; border-radius:6px; font-size:13px; margin:12px 0; }
-        .status-ok { background:#E8F5E9; color:var(--success); }
-        .status-err { background:#FFEBEE; color:var(--danger); }
-        .status-loading { background:#FFF3E0; color:var(--warning); }
-
-        /* Pipeline */
-        .pipeline { display:flex; align-items:center; gap:4px; padding:16px 0; flex-wrap:wrap; }
-        .pipe-step { padding:10px 16px; border-radius:8px; font-size:12px; font-weight:600; color:white; text-align:center; min-width:100px; }
-        .pipe-arrow { font-size:18px; color:#bbb; }
-        .pipe-step.done { opacity:0.6; }
-
-        /* Table */
-        .data-table { width:100%; border-collapse:collapse; font-size:13px; }
-        .data-table th { text-align:left; padding:10px 12px; background:#f0f2f5; font-weight:600; border-bottom:2px solid var(--border); }
-        .data-table td { padding:10px 12px; border-bottom:1px solid var(--border); }
-        .data-table tr:hover { background:#f8f9fa; }
-
-        /* Pareto scatter placeholder */
-        .chart-placeholder { background:#f8f9fa; border-radius:8px; height:250px; display:flex; align-items:center; justify-content:center; color:var(--text-light); font-size:14px; }
-
-        @media (max-width:768px) { .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; } }
+        body { font-family:'Segoe UI',system-ui,sans-serif; background:var(--bg); color:var(--txt); }
+        .header { background:linear-gradient(135deg,var(--pri),var(--acc)); color:#fff; padding:20px 32px; display:flex; justify-content:space-between; align-items:center; }
+        .header h1 { font-size:22px; } .header .sub { font-size:12px; opacity:.7; margin-top:2px; }
+        .badge { padding:5px 12px; border-radius:16px; font-size:11px; font-weight:600; }
+        .badge-on { background:rgba(255,255,255,.2); } .badge-off { background:rgba(255,0,0,.3); }
+        .tabs { display:flex; background:#fff; border-bottom:1px solid var(--bdr); padding:0 16px; }
+        .tab { padding:13px 18px; cursor:pointer; font-weight:600; font-size:13px; color:var(--txtL); border-bottom:3px solid transparent; transition:.2s; }
+        .tab:hover { color:var(--txt); } .tab.on { color:var(--pri); border-bottom-color:var(--pri); }
+        .wrap { max-width:1400px; margin:16px auto; padding:0 16px; }
+        .pnl { display:none; } .pnl.on { display:block; }
+        .g2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+        .g3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+        .g4 { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+        .g5 { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+        .card { background:var(--card); border-radius:10px; padding:20px; box-shadow:0 1px 3px rgba(0,0,0,.08); margin-bottom:16px; }
+        .card h3 { font-size:15px; margin-bottom:14px; color:var(--pri); }
+        .pg { margin-bottom:14px; }
+        .pg label { display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px; }
+        .pg .n { font-weight:600; } .pg .v { color:var(--pri); font-weight:700; }
+        input[type=range] { width:100%; height:5px; appearance:none; -webkit-appearance:none; background:#e0e0e0; border-radius:3px; outline:none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:16px; height:16px; border-radius:50%; background:var(--pri); cursor:pointer; }
+        .btn { padding:10px 22px; border:none; border-radius:7px; cursor:pointer; font-weight:600; font-size:13px; transition:.2s; }
+        .btn-p { background:var(--pri); color:#fff; } .btn-p:hover { background:var(--pri2); }
+        .btn-p:disabled { background:#bbb; cursor:not-allowed; }
+        .mc { background:#f8f9fa; border-radius:7px; padding:14px; text-align:center; }
+        .mc .val { font-size:24px; font-weight:700; color:var(--pri); }
+        .mc .lbl { font-size:10px; color:var(--txtL); margin-top:2px; text-transform:uppercase; letter-spacing:.5px; }
+        .mc.g .val { color:var(--ok); } .mc.w .val { color:var(--warn); } .mc.b .val { color:var(--bad); }
+        .st { padding:8px 14px; border-radius:5px; font-size:12px; margin:10px 0; }
+        .st-ok { background:#E8F5E9; color:var(--ok); } .st-ld { background:#FFF3E0; color:var(--warn); } .st-er { background:#FFEBEE; color:var(--bad); }
+        .psf-c { display:flex; align-items:flex-end; justify-content:center; gap:5px; height:160px; padding:12px 0; }
+        .psf-bw { text-align:center; flex:1; max-width:50px; }
+        .psf-b { border-radius:3px 3px 0 0; min-height:2px; transition:height .3s; }
+        .psf-bl { font-size:9px; color:var(--txtL); margin-top:3px; }
+        .psf-bv { font-size:8px; color:var(--txtL); margin-bottom:1px; }
+        .pipe { display:flex; align-items:center; gap:3px; padding:12px 0; flex-wrap:wrap; }
+        .pipe-s { padding:8px 12px; border-radius:6px; font-size:11px; font-weight:600; color:#fff; text-align:center; min-width:80px; }
+        .pipe-a { font-size:16px; color:#bbb; }
+        table.dt { width:100%; border-collapse:collapse; font-size:12px; }
+        table.dt th { text-align:left; padding:8px 10px; background:#f0f2f5; font-weight:600; border-bottom:2px solid var(--bdr); }
+        table.dt td { padding:8px 10px; border-bottom:1px solid var(--bdr); }
+        .cand-card { border:2px solid var(--bdr); border-radius:8px; padding:14px; cursor:pointer; transition:.2s; }
+        .cand-card:hover { border-color:var(--pri); box-shadow:0 2px 8px rgba(21,101,192,.15); }
+        .cand-card.sel { border-color:var(--pri); background:#E3F2FD; }
+        .cand-rank { font-size:20px; font-weight:700; color:var(--pri); }
+        .cand-metric { font-size:11px; color:var(--txtL); margin-top:4px; }
+        .cand-metric b { color:var(--txt); }
+        .ph { background:#f8f9fa; border-radius:8px; height:200px; display:flex; align-items:center; justify-content:center; color:var(--txtL); font-size:13px; }
+        @media(max-width:768px) { .g2,.g3,.g4,.g5 { grid-template-columns:1fr; } }
     </style>
 </head>
 <body>
-    <div class="header">
-        <div>
-            <h1>UDFPS PINN Design Studio</h1>
-            <div class="subtitle">BM Optical Inverse Design Platform</div>
+<div class="header">
+    <div><h1>UDFPS PINN Design Studio</h1><div class="sub">BM Optical Inverse Design — 30mm x 30mm Sensor (417x417 px, 72um pitch)</div></div>
+    <div id="conn" class="badge badge-off">Connecting...</div>
+</div>
+<div class="tabs">
+    <div class="tab on" onclick="tab('fwd')">Forward Design</div>
+    <div class="tab" onclick="tab('inv')">Inverse Design</div>
+    <div class="tab" onclick="tab('sys')">System</div>
+</div>
+<div class="wrap">
+
+<!-- ═══ Forward Design ═══ -->
+<div id="fwd" class="pnl on">
+<div class="g2">
+    <div class="card">
+        <h3>Design Parameters</h3>
+        <div class="pg"><label><span class="n">delta_BM1</span><span class="v" id="f-d1v">0.0 um</span></label><input type="range" id="f-d1" min="-10" max="10" step="0.5" value="0" oninput="up()"></div>
+        <div class="pg"><label><span class="n">delta_BM2</span><span class="v" id="f-d2v">0.0 um</span></label><input type="range" id="f-d2" min="-10" max="10" step="0.5" value="0" oninput="up()"></div>
+        <div class="pg"><label><span class="n">w1 (BM1 aperture)</span><span class="v" id="f-w1v">10.0 um</span></label><input type="range" id="f-w1" min="5" max="20" step="0.5" value="10" oninput="up()"></div>
+        <div class="pg"><label><span class="n">w2 (BM2 aperture)</span><span class="v" id="f-w2v">10.0 um</span></label><input type="range" id="f-w2" min="5" max="20" step="0.5" value="10" oninput="up()"></div>
+        <div class="pg"><label><span class="n">theta (angle)</span><span class="v" id="f-thv">0 deg</span></label><input type="range" id="f-th" min="0" max="40" step="1" value="0" oninput="up()"></div>
+        <div style="display:flex;gap:8px">
+            <button class="btn btn-p" onclick="runFwd()" id="btn-fwd">Predict PSF</button>
+            <button class="btn btn-p" onclick="runFP()" id="btn-fp">Simulate Fingerprint</button>
         </div>
-        <div id="conn-status" class="status-badge status-offline">Connecting...</div>
+        <div id="fwd-st"></div>
     </div>
-
-    <div class="tabs">
-        <div class="tab active" onclick="showTab('tab-psf')">PSF Inference</div>
-        <div class="tab" onclick="showTab('tab-fingerprint')">Fingerprint</div>
-        <div class="tab" onclick="showTab('tab-design')">Inverse Design</div>
-        <div class="tab" onclick="showTab('tab-overview')">System Overview</div>
-    </div>
-
-    <div class="content">
-
-        <!-- ═══ Tab 1: PSF Inference ═══ -->
-        <div id="tab-psf" class="panel active">
-            <div class="grid-2">
-                <div class="card">
-                    <h3><span class="icon">&#9881;</span> Design Parameters</h3>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">delta_BM1 (offset)</span><span class="val" id="v-d1">0.0 um</span></div>
-                        <input type="range" id="s-d1" min="-10" max="10" step="0.5" value="0" oninput="updateParam()">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">delta_BM2 (offset)</span><span class="val" id="v-d2">0.0 um</span></div>
-                        <input type="range" id="s-d2" min="-10" max="10" step="0.5" value="0" oninput="updateParam()">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">w1 (BM1 aperture)</span><span class="val" id="v-w1">10.0 um</span></div>
-                        <input type="range" id="s-w1" min="5" max="20" step="0.5" value="10" oninput="updateParam()">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">w2 (BM2 aperture)</span><span class="val" id="v-w2">10.0 um</span></div>
-                        <input type="range" id="s-w2" min="5" max="20" step="0.5" value="10" oninput="updateParam()">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">theta (angle)</span><span class="val" id="v-th">0 deg</span></div>
-                        <input type="range" id="s-th" min="0" max="40" step="1" value="0" oninput="updateParam()">
-                    </div>
-                    <button class="btn btn-primary" onclick="runPSF()" id="btn-psf">Predict PSF</button>
-                    <div id="psf-status"></div>
-                </div>
-                <div>
-                    <div class="card" style="margin-bottom:20px">
-                        <h3><span class="icon">&#9783;</span> PSF 7-Pixel</h3>
-                        <div class="psf-chart" id="psf-chart"></div>
-                    </div>
-                    <div class="grid-4" id="psf-metrics">
-                        <div class="metric-card"><div class="value" id="m-mtf">--</div><div class="label">MTF@ridge</div></div>
-                        <div class="metric-card"><div class="value" id="m-skew">--</div><div class="label">Skewness</div></div>
-                        <div class="metric-card"><div class="value" id="m-thru">--</div><div class="label">Throughput</div></div>
-                        <div class="metric-card"><div class="value" id="m-time">--</div><div class="label">Inference</div></div>
-                    </div>
-                </div>
-            </div>
+    <div>
+        <div class="card" style="margin-bottom:12px">
+            <h3>PSF 7-Pixel</h3>
+            <div class="psf-c" id="fwd-psf"></div>
         </div>
-
-        <!-- ═══ Tab 2: Fingerprint ═══ -->
-        <div id="tab-fingerprint" class="panel">
-            <div class="grid-2">
-                <div class="card">
-                    <h3><span class="icon">&#9757;</span> Fingerprint Simulation</h3>
-                    <p style="font-size:13px;color:#888;margin-bottom:16px">
-                        30mm x 30mm sensor (417x417 pixels, 72um pitch)<br>
-                        Each pixel has angle-dependent PSF based on distance from center
-                    </p>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">delta_BM1</span><span class="val" id="fp-d1">0.0 um</span></div>
-                        <input type="range" id="fp-s-d1" min="-10" max="10" step="1" value="0" oninput="document.getElementById('fp-d1').textContent=this.value+' um'">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">delta_BM2</span><span class="val" id="fp-d2">0.0 um</span></div>
-                        <input type="range" id="fp-s-d2" min="-10" max="10" step="1" value="0" oninput="document.getElementById('fp-d2').textContent=this.value+' um'">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">w1</span><span class="val" id="fp-w1">10 um</span></div>
-                        <input type="range" id="fp-s-w1" min="5" max="20" step="1" value="10" oninput="document.getElementById('fp-w1').textContent=this.value+' um'">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">w2</span><span class="val" id="fp-w2">10 um</span></div>
-                        <input type="range" id="fp-s-w2" min="5" max="20" step="1" value="10" oninput="document.getElementById('fp-w2').textContent=this.value+' um'">
-                    </div>
-                    <button class="btn btn-primary" onclick="runFingerprint()" id="btn-fp">Simulate Fingerprint</button>
-                    <div id="fp-status"></div>
-                    <div id="fp-quality" style="margin-top:12px"></div>
-                </div>
-                <div class="card">
-                    <h3><span class="icon">&#128270;</span> Original vs Simulated vs Difference</h3>
-                    <div id="fp-image" style="text-align:center">
-                        <div class="chart-placeholder">Click "Simulate Fingerprint" to generate</div>
-                    </div>
-                    <div style="margin-top:12px;font-size:12px;color:#888">
-                        <b>Sensor spec:</b> 30mm x 30mm | 417x417 px | 72um pitch<br>
-                        <b>Stack height:</b> 590um (CG 550 + Encap 20 + BM 20)<br>
-                        <b>Critical angle:</b> 41.1 deg (beyond = total internal reflection)
-                    </div>
-                </div>
-            </div>
+        <div class="g4" id="fwd-met">
+            <div class="mc"><div class="val" id="fm-mtf">--</div><div class="lbl">MTF@ridge</div></div>
+            <div class="mc"><div class="val" id="fm-sk">--</div><div class="lbl">Skewness</div></div>
+            <div class="mc"><div class="val" id="fm-th">--</div><div class="lbl">Throughput</div></div>
+            <div class="mc"><div class="val" id="fm-ms">--</div><div class="lbl">Inference</div></div>
         </div>
-
-        <!-- ═══ Tab 3: Inverse Design ═══ -->
-        <div id="tab-design" class="panel">
-            <div class="grid-2">
-                <div class="card">
-                    <h3><span class="icon">&#9733;</span> Target Specifications</h3>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">MTF@ridge minimum</span><span class="val" id="v-mtf-min">0.60</span></div>
-                        <input type="range" id="s-mtf-min" min="0.1" max="0.95" step="0.05" value="0.60" oninput="document.getElementById('v-mtf-min').textContent=this.value">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">Skewness maximum</span><span class="val" id="v-skew-max">0.10</span></div>
-                        <input type="range" id="s-skew-max" min="0.01" max="0.5" step="0.01" value="0.10" oninput="document.getElementById('v-skew-max').textContent=this.value">
-                    </div>
-                    <div class="param-group">
-                        <div class="param-label"><span class="name">Iterations</span><span class="val" id="v-iter">30</span></div>
-                        <input type="range" id="s-iter" min="10" max="50" step="5" value="30" oninput="document.getElementById('v-iter').textContent=this.value">
-                    </div>
-                    <button class="btn btn-primary" onclick="runDesign()" id="btn-design">Run Inverse Design</button>
-                    <div id="design-status"></div>
-                </div>
-                <div class="card">
-                    <h3><span class="icon">&#9878;</span> Optimization Result</h3>
-                    <div id="design-result">
-                        <div class="chart-placeholder">Run Inverse Design to see results</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ═══ Tab 3: System Overview ═══ -->
-        <div id="tab-overview" class="panel">
-            <div class="card" style="margin-bottom:20px">
-                <h3><span class="icon">&#9776;</span> Pipeline Architecture</h3>
-                <div class="pipeline">
-                    <div class="pipe-step" style="background:#42A5F5">TMM<br><small>AR Coating</small></div>
-                    <div class="pipe-arrow">&#10132;</div>
-                    <div class="pipe-step" style="background:#66BB6A">ASM<br><small>CG 550um</small></div>
-                    <div class="pipe-arrow">&#10132;</div>
-                    <div class="pipe-step" style="background:#EF5350">PINN<br><small>BM~OPD 40um</small></div>
-                    <div class="pipe-arrow">&#10132;</div>
-                    <div class="pipe-step" style="background:#AB47BC">PSF<br><small>7 Pixels</small></div>
-                    <div class="pipe-arrow">&#10132;</div>
-                    <div class="pipe-step" style="background:#FF7043">FNO<br><small>Surrogate</small></div>
-                    <div class="pipe-arrow">&#10132;</div>
-                    <div class="pipe-step" style="background:#26A69A">BoTorch<br><small>Optimizer</small></div>
-                </div>
-            </div>
-            <div class="grid-3">
-                <div class="card">
-                    <h3>PINN Model</h3>
-                    <div id="sys-pinn">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>FNO Surrogate</h3>
-                    <div id="sys-fno">Loading...</div>
-                </div>
-                <div class="card">
-                    <h3>Physical Constants</h3>
-                    <table class="data-table">
-                        <tr><td>Wavelength</td><td><b>520 nm</b></td></tr>
-                        <tr><td>Cover Glass</td><td><b>550 um, n=1.52</b></td></tr>
-                        <tr><td>BM1 (z=20), BM2 (z=40)</td><td><b>40 um domain</b></td></tr>
-                        <tr><td>OPD Pitch</td><td><b>72 um x 7</b></td></tr>
-                        <tr><td>Wavenumber k</td><td><b>18.37 um<sup>-1</sup></b></td></tr>
-                    </table>
-                </div>
-            </div>
+        <div class="card" style="margin-top:12px">
+            <h3>Fingerprint Simulation (30mm x 30mm)</h3>
+            <div id="fp-img"><div class="ph">Click "Simulate Fingerprint"</div></div>
+            <div id="fp-qual" style="margin-top:10px"></div>
         </div>
     </div>
+</div>
+</div>
+
+<!-- ═══ Inverse Design ═══ -->
+<div id="inv" class="pnl">
+<div class="g2">
+    <div class="card">
+        <h3>Target Specifications</h3>
+        <div class="pg"><label><span class="n">MTF@ridge min</span><span class="v" id="iv-mtf">0.60</span></label><input type="range" id="i-mtf" min="0.1" max="0.95" step="0.05" value="0.60" oninput="document.getElementById('iv-mtf').textContent=this.value"></div>
+        <div class="pg"><label><span class="n">Skewness max</span><span class="v" id="iv-sk">0.10</span></label><input type="range" id="i-sk" min="0.01" max="0.5" step="0.01" value="0.10" oninput="document.getElementById('iv-sk').textContent=this.value"></div>
+        <div class="pg"><label><span class="n">Iterations</span><span class="v" id="iv-it">30</span></label><input type="range" id="i-it" min="10" max="50" step="5" value="30" oninput="document.getElementById('iv-it').textContent=this.value"></div>
+        <button class="btn btn-p" onclick="runInv()" id="btn-inv">Run Inverse Design</button>
+        <div id="inv-st"></div>
+        <div style="margin-top:16px">
+            <h3>Top 5 Candidates</h3>
+            <div class="g5" id="inv-cands"><div class="ph" style="grid-column:1/-1">Run inverse design to see candidates</div></div>
+        </div>
+    </div>
+    <div>
+        <div class="card">
+            <h3>Selected Candidate Detail</h3>
+            <div id="inv-detail"><div class="ph">Select a candidate from Top 5</div></div>
+        </div>
+        <div class="card" style="margin-top:12px">
+            <h3>Fingerprint Comparison</h3>
+            <div id="inv-fp"><div class="ph">Select a candidate to see fingerprint</div></div>
+            <div id="inv-fq" style="margin-top:10px"></div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- ═══ System ═══ -->
+<div id="sys" class="pnl">
+<div class="card" style="margin-bottom:16px">
+    <h3>Pipeline Architecture</h3>
+    <div class="pipe">
+        <div class="pipe-s" style="background:#42A5F5">TMM<br><small>AR</small></div><div class="pipe-a">&#10132;</div>
+        <div class="pipe-s" style="background:#66BB6A">ASM<br><small>CG 550um</small></div><div class="pipe-a">&#10132;</div>
+        <div class="pipe-s" style="background:#EF5350">PINN<br><small>BM 40um</small></div><div class="pipe-a">&#10132;</div>
+        <div class="pipe-s" style="background:#AB47BC">PSF<br><small>7px</small></div><div class="pipe-a">&#10132;</div>
+        <div class="pipe-s" style="background:#FF7043">FNO<br><small>1ms</small></div><div class="pipe-a">&#10132;</div>
+        <div class="pipe-s" style="background:#26A69A">BoTorch<br><small>Optim</small></div>
+    </div>
+</div>
+<div class="g3">
+    <div class="card"><h3>PINN Model</h3><div id="sys-pinn">Loading...</div></div>
+    <div class="card"><h3>FNO Surrogate</h3><div id="sys-fno">Loading...</div></div>
+    <div class="card"><h3>Sensor Spec</h3>
+        <table class="dt">
+            <tr><td>Sensor size</td><td><b>30mm x 30mm</b></td></tr>
+            <tr><td>Pixels</td><td><b>417 x 417</b></td></tr>
+            <tr><td>Pitch (x &amp; y)</td><td><b>72 um</b></td></tr>
+            <tr><td>Stack height</td><td><b>590 um</b></td></tr>
+            <tr><td>Wavelength</td><td><b>520 nm</b></td></tr>
+            <tr><td>Critical angle</td><td><b>41.1 deg</b></td></tr>
+        </table>
+    </div>
+</div>
+</div>
+</div>
 
 <script>
-const API = window.location.origin;
-let apiOnline = false;
+const API=window.location.origin;
+function tab(id){document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.getElementById(id).classList.add('on');event.target.classList.add('on');}
+function up(){['d1','d2','w1','w2','th'].forEach(k=>{const e=document.getElementById('f-'+k);document.getElementById('f-'+k+'v').textContent=e.value+(k==='th'?' deg':' um');});}
+function psf(el,data){const L=['R','V','R','V(c)','R','V','R'],C=['#42A5F5','#90CAF9','#42A5F5','#EF5350','#42A5F5','#90CAF9','#42A5F5'],mx=Math.max(...data.map(Math.abs))||1;let h='';data.forEach((v,i)=>{const ht=Math.max(3,(Math.abs(v)/mx)*130);h+='<div class="psf-bw"><div class="psf-bv">'+v.toExponential(1)+'</div><div class="psf-b" style="height:'+ht+'px;background:'+C[i]+'"></div><div class="psf-bl">'+L[i]+'</div></div>';});el.innerHTML=h;}
+function met(id,v,c){const e=document.getElementById(id);e.textContent=v;e.parentElement.className='mc'+(c?' '+c:'');}
+function gp(){return{delta_bm1:+document.getElementById('f-d1').value,delta_bm2:+document.getElementById('f-d2').value,w1:+document.getElementById('f-w1').value,w2:+document.getElementById('f-w2').value,theta_deg:+document.getElementById('f-th').value};}
 
-function showTab(id) {
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
-    event.target.classList.add('active');
-}
-
-function updateParam() {
-    document.getElementById('v-d1').textContent = document.getElementById('s-d1').value + ' um';
-    document.getElementById('v-d2').textContent = document.getElementById('s-d2').value + ' um';
-    document.getElementById('v-w1').textContent = document.getElementById('s-w1').value + ' um';
-    document.getElementById('v-w2').textContent = document.getElementById('s-w2').value + ' um';
-    document.getElementById('v-th').textContent = document.getElementById('s-th').value + ' deg';
-}
-
-function renderPSF(psf7, highlight) {
-    const labels = ['R','V','R','V(c)','R','V','R'];
-    const colors = ['#42A5F5','#90CAF9','#42A5F5','#EF5350','#42A5F5','#90CAF9','#42A5F5'];
-    const mx = Math.max(...psf7.map(Math.abs)) || 1;
-    let html = '';
-    psf7.forEach((v, i) => {
-        const h = Math.max(3, (Math.abs(v) / mx) * 140);
-        html += '<div class="psf-bar-wrap">'
-            + '<div class="psf-bar-val">' + v.toExponential(1) + '</div>'
-            + '<div class="psf-bar" style="height:' + h + 'px;background:' + colors[i] + '"></div>'
-            + '<div class="psf-bar-label">' + labels[i] + '</div></div>';
-    });
-    document.getElementById('psf-chart').innerHTML = html;
-}
-
-function setMetric(id, val, cls) {
-    const el = document.getElementById(id);
-    el.textContent = val;
-    el.parentElement.className = 'metric-card' + (cls ? ' ' + cls : '');
-}
-
-async function runPSF() {
-    const params = {
-        delta_bm1: +document.getElementById('s-d1').value,
-        delta_bm2: +document.getElementById('s-d2').value,
-        w1: +document.getElementById('s-w1').value,
-        w2: +document.getElementById('s-w2').value,
-        theta_deg: +document.getElementById('s-th').value,
-    };
-    document.getElementById('btn-psf').disabled = true;
-    document.getElementById('psf-status').innerHTML = '<div class="status-msg status-loading">Computing...</div>';
-
-    try {
-        const r = await fetch(API + '/api/inference/psf', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({params}),
-        });
-        const d = await r.json();
-        renderPSF(d.psf_7);
-        setMetric('m-mtf', d.mtf_ridge.toFixed(3), d.mtf_ridge > 0.5 ? 'good' : d.mtf_ridge > 0 ? 'warn' : 'bad');
-        setMetric('m-skew', d.skewness.toFixed(3), Math.abs(d.skewness) < 0.1 ? 'good' : 'warn');
-        setMetric('m-thru', d.throughput.toFixed(4));
-        setMetric('m-time', d.inference_ms.toFixed(0) + 'ms');
-        document.getElementById('psf-status').innerHTML = '<div class="status-msg status-ok">Prediction complete</div>';
-    } catch(e) {
-        // Demo mode
-        const demo = [0.05, 0.12, 0.28, 0.85, 0.28, 0.12, 0.05];
-        renderPSF(demo);
-        setMetric('m-mtf', '0.504', 'good');
-        setMetric('m-skew', '0.000', 'good');
-        setMetric('m-thru', '1.750');
-        setMetric('m-time', 'demo');
-        document.getElementById('psf-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
+async function runFwd(){
+    document.getElementById('btn-fwd').disabled=true;
+    document.getElementById('fwd-st').innerHTML='<div class="st st-ld">Computing...</div>';
+    try{
+        const r=await fetch(API+'/api/inference/psf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({params:gp()})});
+        const d=await r.json();
+        psf(document.getElementById('fwd-psf'),d.psf_7);
+        met('fm-mtf',d.mtf_ridge.toFixed(3),d.mtf_ridge>0.5?'g':d.mtf_ridge>0?'w':'b');
+        met('fm-sk',d.skewness.toFixed(3),Math.abs(d.skewness)<0.1?'g':'w');
+        met('fm-th',d.throughput.toFixed(4));
+        met('fm-ms',d.inference_ms.toFixed(0)+'ms');
+        document.getElementById('fwd-st').innerHTML='<div class="st st-ok">Done</div>';
+    }catch(e){
+        psf(document.getElementById('fwd-psf'),[.05,.12,.28,.85,.28,.12,.05]);
+        met('fm-mtf','0.504','g');met('fm-sk','0.000','g');met('fm-th','1.750');met('fm-ms','demo');
+        document.getElementById('fwd-st').innerHTML='<div class="st st-ld">Demo mode</div>';
     }
-    document.getElementById('btn-psf').disabled = false;
+    document.getElementById('btn-fwd').disabled=false;
 }
 
-async function runFingerprint() {
-    const params = {
-        delta_bm1: +document.getElementById('fp-s-d1').value,
-        delta_bm2: +document.getElementById('fp-s-d2').value,
-        w1: +document.getElementById('fp-s-w1').value,
-        w2: +document.getElementById('fp-s-w2').value,
-        theta_deg: 0,
-    };
-    document.getElementById('btn-fp').disabled = true;
-    document.getElementById('fp-status').innerHTML = '<div class="status-msg status-loading">Simulating 417x417 sensor... (10-30s)</div>';
-
-    try {
-        const r = await fetch(API + '/api/fingerprint/simulate', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({params}),
-        });
-        const d = await r.json();
-        document.getElementById('fp-image').innerHTML =
-            '<img src="data:image/png;base64,' + d.image_base64 + '" style="max-width:100%;border-radius:8px">';
-
-        const q = d.quality;
-        document.getElementById('fp-quality').innerHTML = `
-            <div class="grid-4">
-                <div class="metric-card ${q.correlation>0.8?'good':q.correlation>0.5?'warn':'bad'}">
-                    <div class="value">${q.correlation.toFixed(3)}</div><div class="label">Correlation</div></div>
-                <div class="metric-card ${q.center_quality>0.8?'good':'warn'}">
-                    <div class="value">${q.center_quality.toFixed(3)}</div><div class="label">Center Quality</div></div>
-                <div class="metric-card ${q.edge_quality>0.5?'good':'warn'}">
-                    <div class="value">${q.edge_quality.toFixed(3)}</div><div class="label">Edge Quality</div></div>
-                <div class="metric-card">
-                    <div class="value">${q.valid_area_pct.toFixed(0)}%</div><div class="label">Valid Area</div></div>
-            </div>`;
-        document.getElementById('fp-status').innerHTML = '<div class="status-msg status-ok">Simulation complete</div>';
-    } catch(e) {
-        document.getElementById('fp-image').innerHTML =
-            '<div class="chart-placeholder">API offline — start server first<br><code>uvicorn backend.api.main:app --port 8000</code></div>';
-        document.getElementById('fp-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
+async function runFP(){
+    document.getElementById('btn-fp').disabled=true;
+    document.getElementById('fwd-st').innerHTML='<div class="st st-ld">Simulating 417x417 sensor... (10-30s)</div>';
+    try{
+        const r=await fetch(API+'/api/fingerprint/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({params:gp()})});
+        const d=await r.json();
+        document.getElementById('fp-img').innerHTML='<img src="data:image/png;base64,'+d.image_base64+'" style="max-width:100%;border-radius:6px">';
+        const q=d.quality;
+        document.getElementById('fp-qual').innerHTML='<div class="g4"><div class="mc '+(q.correlation>.7?'g':'w')+'"><div class="val">'+q.correlation.toFixed(3)+'</div><div class="lbl">Correlation</div></div><div class="mc '+(q.center_quality>.7?'g':'w')+'"><div class="val">'+q.center_quality.toFixed(3)+'</div><div class="lbl">Center</div></div><div class="mc"><div class="val">'+q.edge_quality.toFixed(3)+'</div><div class="lbl">Edge</div></div><div class="mc"><div class="val">'+q.valid_area_pct.toFixed(0)+'%</div><div class="lbl">Valid</div></div></div>';
+        document.getElementById('fwd-st').innerHTML='<div class="st st-ok">Fingerprint simulation complete</div>';
+    }catch(e){
+        document.getElementById('fp-img').innerHTML='<div class="ph">API offline</div>';
+        document.getElementById('fwd-st').innerHTML='<div class="st st-ld">Demo mode</div>';
     }
-    document.getElementById('btn-fp').disabled = false;
+    document.getElementById('btn-fp').disabled=false;
 }
 
-async function runDesign() {
-    document.getElementById('btn-design').disabled = true;
-    document.getElementById('design-status').innerHTML = '<div class="status-msg status-loading">Running BoTorch optimization... (1-5 min)</div>';
-
-    try {
-        const r = await fetch(API + '/api/design/run', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({
-                spec: { mtf_ridge_min: +document.getElementById('s-mtf-min').value, skewness_max: +document.getElementById('s-skew-max').value },
-                n_iterations: +document.getElementById('s-iter').value,
-            }),
-        });
-        const d = await r.json();
-        const b = d.best;
-        document.getElementById('design-result').innerHTML = `
-            <div class="grid-4" style="margin-bottom:16px">
-                <div class="metric-card good"><div class="value">${b.mtf_ridge.toFixed(3)}</div><div class="label">MTF</div></div>
-                <div class="metric-card"><div class="value">${b.skewness.toFixed(3)}</div><div class="label">Skewness</div></div>
-                <div class="metric-card"><div class="value">${b.throughput.toFixed(3)}</div><div class="label">Throughput</div></div>
-                <div class="metric-card"><div class="value">${d.elapsed_sec.toFixed(0)}s</div><div class="label">Time</div></div>
-            </div>
-            <h4 style="margin:12px 0 8px">Best Design</h4>
-            <table class="data-table">
-                <tr><th>Parameter</th><th>Value</th><th>Range</th></tr>
-                <tr><td>delta_BM1</td><td><b>${b.params.delta_bm1.toFixed(1)} um</b></td><td>[-10, 10]</td></tr>
-                <tr><td>delta_BM2</td><td><b>${b.params.delta_bm2.toFixed(1)} um</b></td><td>[-10, 10]</td></tr>
-                <tr><td>w1</td><td><b>${b.params.w1.toFixed(1)} um</b></td><td>[5, 20]</td></tr>
-                <tr><td>w2</td><td><b>${b.params.w2.toFixed(1)} um</b></td><td>[5, 20]</td></tr>
-            </table>
-            <p style="margin-top:12px;font-size:12px;color:#888">${d.n_evaluations} evaluations, ${d.pareto_front.length} Pareto candidates</p>
-        `;
-        document.getElementById('design-status').innerHTML = '<div class="status-msg status-ok">Optimization complete</div>';
-    } catch(e) {
-        // Demo result
-        document.getElementById('design-result').innerHTML = `
-            <div class="grid-4" style="margin-bottom:16px">
-                <div class="metric-card good"><div class="value">0.782</div><div class="label">MTF</div></div>
-                <div class="metric-card good"><div class="value">0.045</div><div class="label">Skewness</div></div>
-                <div class="metric-card"><div class="value">0.891</div><div class="label">Throughput</div></div>
-                <div class="metric-card"><div class="value">8.2s</div><div class="label">Time</div></div>
-            </div>
-            <h4 style="margin:12px 0 8px">Best Design (Demo)</h4>
-            <table class="data-table">
-                <tr><th>Parameter</th><th>Value</th><th>Range</th></tr>
-                <tr><td>delta_BM1</td><td><b>+2.3 um</b></td><td>[-10, 10]</td></tr>
-                <tr><td>delta_BM2</td><td><b>-1.5 um</b></td><td>[-10, 10]</td></tr>
-                <tr><td>w1</td><td><b>12.8 um</b></td><td>[5, 20]</td></tr>
-                <tr><td>w2</td><td><b>9.4 um</b></td><td>[5, 20]</td></tr>
-            </table>
-            <p style="margin-top:12px;font-size:12px;color:#888">Demo mode (API offline) - 150 evaluations, 5 Pareto candidates</p>
-        `;
-        document.getElementById('design-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
+let invResult=null;
+async function runInv(){
+    document.getElementById('btn-inv').disabled=true;
+    document.getElementById('inv-st').innerHTML='<div class="st st-ld">Running BoTorch... (1-5 min)</div>';
+    try{
+        const r=await fetch(API+'/api/design/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({spec:{mtf_ridge_min:+document.getElementById('i-mtf').value,skewness_max:+document.getElementById('i-sk').value},n_iterations:+document.getElementById('i-it').value})});
+        const d=await r.json();invResult=d;
+        let html='';const cands=d.pareto_front.slice(0,5);
+        if(cands.length===0)cands.push(d.best);
+        cands.forEach((c,i)=>{html+='<div class="cand-card" onclick="selCand('+i+')"><div class="cand-rank">#'+(i+1)+'</div><div class="cand-metric">MTF <b>'+c.mtf_ridge.toFixed(3)+'</b></div><div class="cand-metric">Skew <b>'+c.skewness.toFixed(3)+'</b></div><div class="cand-metric">w1=<b>'+c.params.w1.toFixed(1)+'</b></div></div>';});
+        document.getElementById('inv-cands').innerHTML=html;
+        document.getElementById('inv-st').innerHTML='<div class="st st-ok">'+d.elapsed_sec.toFixed(0)+'s, '+d.n_evaluations+' evals, '+d.pareto_front.length+' Pareto</div>';
+        selCand(0);
+    }catch(e){
+        // Demo
+        const demo=[{params:{delta_bm1:2.3,delta_bm2:-1.5,w1:12.8,w2:9.4,theta_deg:0},mtf_ridge:.782,skewness:.045,throughput:.891,crosstalk:1.2},{params:{delta_bm1:-0.5,delta_bm2:3.2,w1:14.1,w2:11.2,theta_deg:0},mtf_ridge:.741,skewness:.032,throughput:.923,crosstalk:1.5},{params:{delta_bm1:5.1,delta_bm2:-2.8,w1:8.5,w2:13.7,theta_deg:0},mtf_ridge:.695,skewness:.089,throughput:.845,crosstalk:2.1},{params:{delta_bm1:-3.4,delta_bm2:1.9,w1:16.2,w2:7.8,theta_deg:0},mtf_ridge:.654,skewness:.021,throughput:.967,crosstalk:0.8},{params:{delta_bm1:0.8,delta_bm2:-4.1,w1:11.5,w2:15.3,theta_deg:0},mtf_ridge:.612,skewness:.078,throughput:.812,crosstalk:3.0}];
+        invResult={pareto_front:demo,best:demo[0],n_evaluations:150,elapsed_sec:8.2};
+        let html='';demo.forEach((c,i)=>{html+='<div class="cand-card" onclick="selCand('+i+')"><div class="cand-rank">#'+(i+1)+'</div><div class="cand-metric">MTF <b>'+c.mtf_ridge.toFixed(3)+'</b></div><div class="cand-metric">Skew <b>'+c.skewness.toFixed(3)+'</b></div><div class="cand-metric">w1=<b>'+c.params.w1.toFixed(1)+'</b></div></div>';});
+        document.getElementById('inv-cands').innerHTML=html;
+        document.getElementById('inv-st').innerHTML='<div class="st st-ld">Demo mode (8.2s)</div>';
+        selCand(0);
     }
-    document.getElementById('btn-design').disabled = false;
+    document.getElementById('btn-inv').disabled=false;
 }
 
-async function checkHealth() {
-    try {
-        const r = await fetch(API + '/api/health');
-        const d = await r.json();
-        apiOnline = true;
-        document.getElementById('conn-status').textContent = 'API Online';
-        document.getElementById('conn-status').className = 'status-badge status-online';
-        document.getElementById('sys-pinn').innerHTML = `
-            <table class="data-table">
-                <tr><td>Status</td><td><b style="color:${d.pinn_loaded?'green':'red'}">${d.pinn_loaded?'Loaded':'Not loaded'}</b></td></tr>
-                <tr><td>Parameters</td><td><b>${d.n_pinn_params.toLocaleString()}</b></td></tr>
-                <tr><td>Device</td><td><b>${d.device}</b></td></tr>
-            </table>`;
-        document.getElementById('sys-fno').innerHTML = `
-            <table class="data-table">
-                <tr><td>Status</td><td><b style="color:${d.fno_loaded?'green':'red'}">${d.fno_loaded?'Loaded':'Not loaded'}</b></td></tr>
-                <tr><td>Speed</td><td><b>~1 ms/query</b></td></tr>
-            </table>`;
-    } catch(e) {
-        document.getElementById('conn-status').textContent = 'Demo Mode';
-        document.getElementById('conn-status').className = 'status-badge status-offline';
-        document.getElementById('sys-pinn').innerHTML = '<div class="status-msg status-loading">API offline. Start: uvicorn backend.api.main:app --port 8000</div>';
-        document.getElementById('sys-fno').innerHTML = '<div class="status-msg status-loading">API offline</div>';
+async function selCand(idx){
+    document.querySelectorAll('.cand-card').forEach((c,i)=>c.classList.toggle('sel',i===idx));
+    const cands=invResult.pareto_front.length?invResult.pareto_front:invResult.best?[invResult.best]:[];
+    if(!cands[idx])return;
+    const c=cands[idx],p=c.params;
+    document.getElementById('inv-detail').innerHTML='<div class="g4" style="margin-bottom:12px"><div class="mc g"><div class="val">'+c.mtf_ridge.toFixed(3)+'</div><div class="lbl">MTF</div></div><div class="mc"><div class="val">'+c.skewness.toFixed(3)+'</div><div class="lbl">Skew</div></div><div class="mc"><div class="val">'+c.throughput.toFixed(3)+'</div><div class="lbl">Throughput</div></div><div class="mc"><div class="val">'+(c.crosstalk||0).toFixed(1)+'</div><div class="lbl">Crosstalk</div></div></div><table class="dt"><tr><th>Parameter</th><th>Value</th><th>Range</th></tr><tr><td>delta_BM1</td><td><b>'+p.delta_bm1.toFixed(1)+' um</b></td><td>[-10, 10]</td></tr><tr><td>delta_BM2</td><td><b>'+p.delta_bm2.toFixed(1)+' um</b></td><td>[-10, 10]</td></tr><tr><td>w1</td><td><b>'+p.w1.toFixed(1)+' um</b></td><td>[5, 20]</td></tr><tr><td>w2</td><td><b>'+p.w2.toFixed(1)+' um</b></td><td>[5, 20]</td></tr></table>';
+    // Fingerprint for this candidate
+    document.getElementById('inv-fp').innerHTML='<div class="st st-ld">Simulating fingerprint...</div>';
+    try{
+        const r=await fetch(API+'/api/fingerprint/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({params:p})});
+        const d=await r.json();
+        document.getElementById('inv-fp').innerHTML='<img src="data:image/png;base64,'+d.image_base64+'" style="max-width:100%;border-radius:6px">';
+        const q=d.quality;
+        document.getElementById('inv-fq').innerHTML='<div class="g4"><div class="mc '+(q.correlation>.7?'g':'w')+'"><div class="val">'+q.correlation.toFixed(3)+'</div><div class="lbl">Corr</div></div><div class="mc"><div class="val">'+q.center_quality.toFixed(3)+'</div><div class="lbl">Center</div></div><div class="mc"><div class="val">'+q.edge_quality.toFixed(3)+'</div><div class="lbl">Edge</div></div><div class="mc"><div class="val">'+q.valid_area_pct.toFixed(0)+'%</div><div class="lbl">Valid</div></div></div>';
+    }catch(e){
+        document.getElementById('inv-fp').innerHTML='<div class="ph">API offline</div>';
     }
 }
 
-// Init: show demo PSF
-renderPSF([0.05, 0.12, 0.28, 0.85, 0.28, 0.12, 0.05]);
-setMetric('m-mtf', '--');
-setMetric('m-skew', '--');
-setMetric('m-thru', '--');
-setMetric('m-time', '--');
-checkHealth();
+async function chk(){
+    try{
+        const r=await fetch(API+'/api/health');const d=await r.json();
+        document.getElementById('conn').textContent='Online';document.getElementById('conn').className='badge badge-on';
+        document.getElementById('sys-pinn').innerHTML='<table class="dt"><tr><td>Status</td><td><b style="color:'+(d.pinn_loaded?'green':'red')+'">'+(d.pinn_loaded?'Loaded':'Not loaded')+'</b></td></tr><tr><td>Params</td><td><b>'+d.n_pinn_params.toLocaleString()+'</b></td></tr><tr><td>Device</td><td><b>'+d.device+'</b></td></tr></table>';
+        document.getElementById('sys-fno').innerHTML='<table class="dt"><tr><td>Status</td><td><b style="color:'+(d.fno_loaded?'green':'red')+'">'+(d.fno_loaded?'Loaded':'Not loaded')+'</b></td></tr><tr><td>Speed</td><td><b>~1 ms/query</b></td></tr></table>';
+    }catch(e){
+        document.getElementById('conn').textContent='Demo Mode';document.getElementById('conn').className='badge badge-off';
+        document.getElementById('sys-pinn').innerHTML='<div class="st st-ld">API offline</div>';
+        document.getElementById('sys-fno').innerHTML='<div class="st st-ld">API offline</div>';
+    }
+}
+psf(document.getElementById('fwd-psf'),[.05,.12,.28,.85,.28,.12,.05]);
+chk();
 </script>
 </body>
 </html>

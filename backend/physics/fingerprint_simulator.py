@@ -30,38 +30,52 @@ CRITICAL_ANGLE_DEG = 41.1
 SENSOR_SIZE_MM = 30.0
 
 
-def generate_sample_fingerprint(size: int = SENSOR_PIXELS, seed: int = 42) -> np.ndarray:
-    """Generate a synthetic fingerprint pattern for demo.
-
-    Creates concentric ridge/valley pattern similar to a real fingerprint.
+def load_fingerprint(path: str | None = None, size: int = SENSOR_PIXELS) -> np.ndarray:
+    """Load real fingerprint image and resize to sensor dimensions.
 
     Args:
-        size: Sensor size in pixels.
-        seed: Random seed.
+        path: Path to fingerprint image. None = use default.
+        size: Target sensor size in pixels (417).
 
     Returns:
         (size, size) float32 array in [0, 1]. 1=ridge, 0=valley.
     """
-    np.random.seed(seed)
+    from pathlib import Path as _Path
+
+    # Try loading saved numpy file first
+    default_npy = _Path(__file__).parent.parent.parent / "data" / "fingerprint_417.npy"
+    if path is None and default_npy.exists():
+        return np.load(str(default_npy)).astype(np.float32)
+
+    # Try loading image file
+    default_png = _Path(__file__).parent.parent.parent / "data" / "fingerprint_417.png"
+    img_path = _Path(path) if path else default_png
+
+    if img_path.exists():
+        from PIL import Image
+        img = Image.open(str(img_path)).convert("L")
+        w, h = img.size
+        s = min(w, h)
+        left, top = (w - s) // 2, (h - s) // 2
+        img = img.crop((left, top, left + s, top + s)).resize((size, size))
+        arr = np.array(img).astype(np.float32) / 255.0
+        # Invert if dark ridges (ridge=1)
+        if arr.mean() > 0.5:
+            arr = 1.0 - arr
+        return arr
+
+    # Fallback: synthetic pattern
+    return _generate_synthetic(size)
+
+
+def _generate_synthetic(size: int = SENSOR_PIXELS) -> np.ndarray:
+    """Fallback: generate synthetic fingerprint pattern."""
     y, x = np.mgrid[:size, :size]
-    cx, cy = size // 2 + 15, size // 2 - 10  # slightly off-center
-
-    # Distance from center
+    cx, cy = size // 2 + 15, size // 2 - 10
     r = np.sqrt((x - cx) ** 2 + (y - cy) ** 2)
-
-    # Concentric ridges with some distortion
-    ridge_freq = 0.35  # ridges per pixel
-    phase_distort = 0.3 * np.sin(0.02 * x) + 0.2 * np.cos(0.015 * y)
-    pattern = 0.5 + 0.5 * np.cos(2 * np.pi * ridge_freq * r + phase_distort)
-
-    # Add some noise
-    pattern += 0.05 * np.random.randn(size, size)
-
-    # Fade edges
-    edge_mask = np.exp(-((x - size // 2) ** 2 + (y - size // 2) ** 2) / (0.35 * size) ** 2)
-    pattern = pattern * edge_mask
-
-    return np.clip(pattern, 0, 1).astype(np.float32)
+    pattern = 0.5 + 0.5 * np.cos(2 * np.pi * 0.35 * r + 0.3 * np.sin(0.02 * x))
+    edge = np.exp(-((x - size // 2) ** 2 + (y - size // 2) ** 2) / (0.35 * size) ** 2)
+    return np.clip(pattern * edge, 0, 1).astype(np.float32)
 
 
 def compute_angle_map(size: int = SENSOR_PIXELS) -> np.ndarray:
