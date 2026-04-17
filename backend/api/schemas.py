@@ -49,6 +49,7 @@ class DesignRequest(BaseModel):
     spec: DesignSpec = DesignSpec()
     n_iterations: int = Field(30, ge=5, le=100)
     theta_deg: float = Field(0.0, ge=0, le=41)
+    mode: str = Field("quick", description="'quick' (FNO grid, ~1s) or 'full' (FNO+BoTorch, ~2min)")
 
 
 class DesignCandidate(BaseModel):

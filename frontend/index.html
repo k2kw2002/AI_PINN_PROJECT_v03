@@ -114,7 +114,10 @@
         <div class="pg"><label><span class="n">MTF@ridge min</span><span class="v" id="iv-mtf">0.60</span></label><input type="range" id="i-mtf" min="0.1" max="0.95" step="0.05" value="0.60" oninput="document.getElementById('iv-mtf').textContent=this.value"></div>
         <div class="pg"><label><span class="n">Skewness max</span><span class="v" id="iv-sk">0.10</span></label><input type="range" id="i-sk" min="0.01" max="0.5" step="0.01" value="0.10" oninput="document.getElementById('iv-sk').textContent=this.value"></div>
         <div class="pg"><label><span class="n">Iterations</span><span class="v" id="iv-it">30</span></label><input type="range" id="i-it" min="10" max="50" step="5" value="30" oninput="document.getElementById('iv-it').textContent=this.value"></div>
-        <button class="btn btn-p" onclick="runInv()" id="btn-inv">Run Inverse Design</button>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <button class="btn btn-p" onclick="runInv('quick')" id="btn-inv">Quick (~1s, FNO grid)</button>
+            <button class="btn btn-p" onclick="runInv('full')" id="btn-inv2" style="background:var(--acc)">Full (~2min, FNO+BoTorch)</button>
+        </div>
         <div id="inv-st"></div>
         <div style="margin-top:16px">
             <h3>Top 5 Candidates</h3>
@@ -211,11 +214,13 @@ async function runFP(){
 }
 
 let invResult=null;
-async function runInv(){
+async function runInv(mode){
     document.getElementById('btn-inv').disabled=true;
-    document.getElementById('inv-st').innerHTML='<div class="st st-ld">Running BoTorch... (1-5 min)</div>';
+    document.getElementById('btn-inv2').disabled=true;
+    const modeLabel = mode==='full' ? 'FNO+BoTorch (~2min)' : 'FNO grid search (~1s)';
+    document.getElementById('inv-st').innerHTML='<div class="st st-ld">Running '+modeLabel+'...</div>';
     try{
-        const r=await fetch(API+'/api/design/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({spec:{mtf_ridge_min:+document.getElementById('i-mtf').value,skewness_max:+document.getElementById('i-sk').value},n_iterations:+document.getElementById('i-it').value})});
+        const r=await fetch(API+'/api/design/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({spec:{mtf_ridge_min:+document.getElementById('i-mtf').value,skewness_max:+document.getElementById('i-sk').value},n_iterations:+document.getElementById('i-it').value,mode:mode})});
         const d=await r.json();invResult=d;
         let html='';const cands=d.pareto_front.slice(0,5);
         if(cands.length===0)cands.push(d.best);
@@ -233,6 +238,7 @@ async function runInv(){
         selCand(0);
     }
     document.getElementById('btn-inv').disabled=false;
+    document.getElementById('btn-inv2').disabled=false;
 }
 
 async function selCand(idx){

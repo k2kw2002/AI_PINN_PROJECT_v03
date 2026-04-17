@@ -221,76 +221,109 @@ async def fingerprint_simulate(req: PSFRequest):
 
 @app.post("/api/design/run", response_model=DesignResponse)
 async def design_run(req: DesignRequest):
-    """Inverse design: FNO surrogate + massive parallel evaluation.
+    """Inverse design with two modes:
 
-    FNO is fast (~1ms/query) → evaluate 5000 designs in ~5 seconds.
-    No GP overhead. Pure speed from FNO architecture.
+    Quick (default): FNO batch eval 5000 candidates → Top 5 (~1s)
+    Full: FNO + BoTorch qNEHVI multi-objective → Pareto front (~2min)
     """
     fno = _state["fno"]
     if fno is None:
         raise HTTPException(status_code=503, detail="FNO model not loaded")
 
     import time as _time
-
     device = _state["device"]
     t0 = _time.time()
 
-    # Load FNO normalization stats
-    p_mean = _state["fno_p_mean"].to(device)
-    p_std = _state["fno_p_std"].to(device)
+    if req.mode == "full":
+        # ── Full mode: FNO + BoTorch qNEHVI ──
+        from backend.core.botorch_optimizer import run_inverse_design
+        fno_path = str(ROOT / "checkpoints" / "fno_surrogate.pt")
+        try:
+            result = run_inverse_design(
+                fno_checkpoint=fno_path,
+                n_initial=20,
+                n_iterations=min(req.n_iterations, 30),
+                batch_size=4,
+                theta_deg=req.theta_deg,
+                device=device,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"BoTorch failed: {e}")
 
-    # LHS sampling: 5000 design candidates
-    n_eval = 5000
-    d1 = torch.rand(n_eval) * 20 - 10      # [-10, 10]
-    d2 = torch.rand(n_eval) * 20 - 10
-    w1 = torch.rand(n_eval) * 15 + 5        # [5, 20]
-    w2 = torch.rand(n_eval) * 15 + 5
-    theta = torch.full((n_eval,), req.theta_deg)
+        top5 = []
+        for i in range(min(5, len(result.pareto_params))):
+            p = result.pareto_params[i]
+            o = result.pareto_objectives[i]
+            top5.append(DesignCandidate(
+                params=BMDesignParams(
+                    delta_bm1=float(p[0]), delta_bm2=float(p[1]),
+                    w1=float(p[2]), w2=float(p[3]), theta_deg=req.theta_deg,
+                ),
+                mtf_ridge=float(o[0]), skewness=float(abs(o[2])),
+                throughput=float(o[1]), crosstalk=0.0,
+            ))
+        # Fill to 5 from all evaluations if needed
+        if len(top5) < 5:
+            sorted_idx = np.argsort(-result.all_objectives[:, 0])
+            for idx in sorted_idx:
+                if len(top5) >= 5:
+                    break
+                p = result.all_params[idx]
+                o = result.all_objectives[idx]
+                top5.append(DesignCandidate(
+                    params=BMDesignParams(
+                        delta_bm1=float(p[0]), delta_bm2=float(p[1]),
+                        w1=float(p[2]), w2=float(p[3]), theta_deg=req.theta_deg,
+                    ),
+                    mtf_ridge=float(o[0]), skewness=float(abs(o[2])),
+                    throughput=float(o[1]), crosstalk=0.0,
+                ))
+        n_eval = len(result.all_params)
+    else:
+        # ── Quick mode: FNO batch evaluation ──
+        p_mean = _state["fno_p_mean"].to(device)
+        p_std = _state["fno_p_std"].to(device)
 
-    params_5d = torch.stack([d1, d2, w1, w2, theta], dim=1).to(device)
-    params_norm = (params_5d - p_mean) / p_std
+        n_eval = 5000
+        params_5d = torch.stack([
+            torch.rand(n_eval) * 20 - 10,
+            torch.rand(n_eval) * 20 - 10,
+            torch.rand(n_eval) * 15 + 5,
+            torch.rand(n_eval) * 15 + 5,
+            torch.full((n_eval,), req.theta_deg),
+        ], dim=1).to(device)
+        params_norm = (params_5d - p_mean) / p_std
 
-    # FNO batch inference (~5ms for 5000 samples!)
-    fno.eval()
-    with torch.no_grad():
-        psf_pred = fno(params_norm.float())  # (5000, 7)
+        fno.eval()
+        with torch.no_grad():
+            psf_pred = fno(params_norm.float())
 
-    # Compute metrics for all candidates
-    candidates = []
-    psf_np = psf_pred.cpu().numpy()
-    params_np = params_5d.cpu().numpy()
+        psf_np = psf_pred.cpu().numpy()
+        params_np = params_5d.cpu().numpy()
 
-    for i in range(n_eval):
-        m = compute_all_metrics(psf_np[i])
-        candidates.append({
-            "params": params_np[i],
-            "mtf": m["mtf_ridge"],
-            "skew": m["skewness"],
-            "thru": m["throughput"],
-            "xt": min(m["crosstalk"], 999),
-        })
+        scored = []
+        for i in range(n_eval):
+            m = compute_all_metrics(psf_np[i])
+            scored.append((params_np[i], m))
 
-    # Sort by MTF and pick top 5
-    candidates.sort(key=lambda c: c["mtf"], reverse=True)
-    top5 = []
-    for c in candidates[:5]:
-        p = c["params"]
-        top5.append(DesignCandidate(
-            params=BMDesignParams(
-                delta_bm1=float(p[0]), delta_bm2=float(p[1]),
-                w1=float(p[2]), w2=float(p[3]), theta_deg=req.theta_deg,
-            ),
-            mtf_ridge=c["mtf"],
-            skewness=c["skew"],
-            throughput=c["thru"],
-            crosstalk=c["xt"],
-        ))
+        scored.sort(key=lambda x: x[1]["mtf_ridge"], reverse=True)
+        top5 = []
+        for p, m in scored[:5]:
+            top5.append(DesignCandidate(
+                params=BMDesignParams(
+                    delta_bm1=float(p[0]), delta_bm2=float(p[1]),
+                    w1=float(p[2]), w2=float(p[3]), theta_deg=req.theta_deg,
+                ),
+                mtf_ridge=m["mtf_ridge"], skewness=m["skewness"],
+                throughput=m["throughput"], crosstalk=min(m["crosstalk"], 999),
+            ))
 
+    top5.sort(key=lambda c: c.mtf_ridge, reverse=True)
     elapsed = _time.time() - t0
 
     return DesignResponse(
         best=top5[0],
-        pareto_front=top5,
+        pareto_front=top5[:5],
         n_evaluations=n_eval,
         elapsed_sec=elapsed,
     )
