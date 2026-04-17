@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
+import numpy as np
 import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -147,6 +148,76 @@ async def inference_psf(req: PSFRequest):
         crosstalk=min(metrics["crosstalk"], 999),
         inference_ms=elapsed_ms,
     )
+
+
+# ── Fingerprint Simulation ──
+
+@app.post("/api/fingerprint/simulate")
+async def fingerprint_simulate(req: PSFRequest):
+    """Simulate fingerprint image with current design params."""
+    pinn = _state["pinn"]
+    if pinn is None:
+        raise HTTPException(status_code=503, detail="PINN model not loaded")
+
+    import base64, io
+    from backend.physics.fingerprint_simulator import (
+        generate_sample_fingerprint, simulate_fingerprint, compute_image_quality,
+    )
+    from backend.physics.psf_metrics import compute_psf_7
+
+    p = req.params
+    device = _state["device"]
+
+    # Generate PSF at multiple angles
+    angles = [0, 5, 10, 15, 20, 25, 30, 35, 40]
+    psf_by_angle = {}
+    for theta in angles:
+        psf = compute_psf_7(pinn, p.delta_bm1, p.delta_bm2, p.w1, p.w2, float(theta), device)
+        psf_by_angle[float(theta)] = psf
+
+    # Generate sample fingerprint and simulate
+    fp_raw = generate_sample_fingerprint()
+    fp_sim = simulate_fingerprint(psf_by_angle, fp_raw)
+    quality = compute_image_quality(fp_raw, fp_sim)
+
+    # Convert to base64 PNG for frontend
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+
+    axes[0].imshow(fp_raw, cmap="gray", vmin=0, vmax=1)
+    axes[0].set_title("Original", fontsize=11)
+    axes[0].axis("off")
+
+    axes[1].imshow(fp_sim, cmap="gray", vmin=0, vmax=1)
+    axes[1].set_title(f"Simulated (corr={quality['correlation']:.3f})", fontsize=11)
+    axes[1].axis("off")
+
+    # Difference
+    diff = np.abs(fp_raw - fp_sim)
+    axes[2].imshow(diff, cmap="hot", vmin=0, vmax=0.5)
+    axes[2].set_title("Difference", fontsize=11)
+    axes[2].axis("off")
+
+    plt.suptitle(f"d1={p.delta_bm1:.1f} d2={p.delta_bm2:.1f} w1={p.w1:.0f} w2={p.w2:.0f}",
+                 fontsize=10)
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
+    plt.close(fig)
+    buf.seek(0)
+    img_b64 = base64.b64encode(buf.read()).decode("utf-8")
+
+    return {
+        "image_base64": img_b64,
+        "quality": quality,
+        "sensor_size_mm": 30.0,
+        "sensor_pixels": 417,
+        "pitch_um": 72.0,
+    }
 
 
 # ── Inverse Design ──

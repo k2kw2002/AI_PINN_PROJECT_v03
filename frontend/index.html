@@ -113,6 +113,7 @@
 
     <div class="tabs">
         <div class="tab active" onclick="showTab('tab-psf')">PSF Inference</div>
+        <div class="tab" onclick="showTab('tab-fingerprint')">Fingerprint</div>
         <div class="tab" onclick="showTab('tab-design')">Inverse Design</div>
         <div class="tab" onclick="showTab('tab-overview')">System Overview</div>
     </div>
@@ -162,7 +163,50 @@
             </div>
         </div>
 
-        <!-- ═══ Tab 2: Inverse Design ═══ -->
+        <!-- ═══ Tab 2: Fingerprint ═══ -->
+        <div id="tab-fingerprint" class="panel">
+            <div class="grid-2">
+                <div class="card">
+                    <h3><span class="icon">&#9757;</span> Fingerprint Simulation</h3>
+                    <p style="font-size:13px;color:#888;margin-bottom:16px">
+                        30mm x 30mm sensor (417x417 pixels, 72um pitch)<br>
+                        Each pixel has angle-dependent PSF based on distance from center
+                    </p>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">delta_BM1</span><span class="val" id="fp-d1">0.0 um</span></div>
+                        <input type="range" id="fp-s-d1" min="-10" max="10" step="1" value="0" oninput="document.getElementById('fp-d1').textContent=this.value+' um'">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">delta_BM2</span><span class="val" id="fp-d2">0.0 um</span></div>
+                        <input type="range" id="fp-s-d2" min="-10" max="10" step="1" value="0" oninput="document.getElementById('fp-d2').textContent=this.value+' um'">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">w1</span><span class="val" id="fp-w1">10 um</span></div>
+                        <input type="range" id="fp-s-w1" min="5" max="20" step="1" value="10" oninput="document.getElementById('fp-w1').textContent=this.value+' um'">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">w2</span><span class="val" id="fp-w2">10 um</span></div>
+                        <input type="range" id="fp-s-w2" min="5" max="20" step="1" value="10" oninput="document.getElementById('fp-w2').textContent=this.value+' um'">
+                    </div>
+                    <button class="btn btn-primary" onclick="runFingerprint()" id="btn-fp">Simulate Fingerprint</button>
+                    <div id="fp-status"></div>
+                    <div id="fp-quality" style="margin-top:12px"></div>
+                </div>
+                <div class="card">
+                    <h3><span class="icon">&#128270;</span> Original vs Simulated vs Difference</h3>
+                    <div id="fp-image" style="text-align:center">
+                        <div class="chart-placeholder">Click "Simulate Fingerprint" to generate</div>
+                    </div>
+                    <div style="margin-top:12px;font-size:12px;color:#888">
+                        <b>Sensor spec:</b> 30mm x 30mm | 417x417 px | 72um pitch<br>
+                        <b>Stack height:</b> 590um (CG 550 + Encap 20 + BM 20)<br>
+                        <b>Critical angle:</b> 41.1 deg (beyond = total internal reflection)
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ Tab 3: Inverse Design ═══ -->
         <div id="tab-design" class="panel">
             <div class="grid-2">
                 <div class="card">
@@ -306,6 +350,47 @@ async function runPSF() {
         document.getElementById('psf-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
     }
     document.getElementById('btn-psf').disabled = false;
+}
+
+async function runFingerprint() {
+    const params = {
+        delta_bm1: +document.getElementById('fp-s-d1').value,
+        delta_bm2: +document.getElementById('fp-s-d2').value,
+        w1: +document.getElementById('fp-s-w1').value,
+        w2: +document.getElementById('fp-s-w2').value,
+        theta_deg: 0,
+    };
+    document.getElementById('btn-fp').disabled = true;
+    document.getElementById('fp-status').innerHTML = '<div class="status-msg status-loading">Simulating 417x417 sensor... (10-30s)</div>';
+
+    try {
+        const r = await fetch(API + '/api/fingerprint/simulate', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({params}),
+        });
+        const d = await r.json();
+        document.getElementById('fp-image').innerHTML =
+            '<img src="data:image/png;base64,' + d.image_base64 + '" style="max-width:100%;border-radius:8px">';
+
+        const q = d.quality;
+        document.getElementById('fp-quality').innerHTML = `
+            <div class="grid-4">
+                <div class="metric-card ${q.correlation>0.8?'good':q.correlation>0.5?'warn':'bad'}">
+                    <div class="value">${q.correlation.toFixed(3)}</div><div class="label">Correlation</div></div>
+                <div class="metric-card ${q.center_quality>0.8?'good':'warn'}">
+                    <div class="value">${q.center_quality.toFixed(3)}</div><div class="label">Center Quality</div></div>
+                <div class="metric-card ${q.edge_quality>0.5?'good':'warn'}">
+                    <div class="value">${q.edge_quality.toFixed(3)}</div><div class="label">Edge Quality</div></div>
+                <div class="metric-card">
+                    <div class="value">${q.valid_area_pct.toFixed(0)}%</div><div class="label">Valid Area</div></div>
+            </div>`;
+        document.getElementById('fp-status').innerHTML = '<div class="status-msg status-ok">Simulation complete</div>';
+    } catch(e) {
+        document.getElementById('fp-image').innerHTML =
+            '<div class="chart-placeholder">API offline — start server first<br><code>uvicorn backend.api.main:app --port 8000</code></div>';
+        document.getElementById('fp-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
+    }
+    document.getElementById('btn-fp').disabled = false;
 }
 
 async function runDesign() {
