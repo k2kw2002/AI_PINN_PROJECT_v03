@@ -18,6 +18,8 @@ from pathlib import Path
 import torch
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from backend.api.schemas import (
     BMDesignParams, PSFRequest, PSFResponse,
@@ -42,6 +44,20 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Serve frontend
+frontend_dir = ROOT / "frontend"
+if frontend_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(frontend_dir)), name="static")
+
+
+@app.get("/")
+async def serve_ui():
+    """Serve Design Studio UI."""
+    html_path = ROOT / "frontend" / "index.html"
+    if html_path.exists():
+        return FileResponse(str(html_path))
+    return {"message": "Frontend not found. Visit /docs for API docs."}
 
 # ── Global model state ──
 _state = {

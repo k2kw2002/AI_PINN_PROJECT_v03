@@ -5,231 +5,398 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>UDFPS PINN Design Studio</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
-        .header { background: linear-gradient(135deg, #1565C0, #7B1FA2); color: white; padding: 20px 30px; }
-        .header h1 { font-size: 24px; }
-        .header p { font-size: 13px; opacity: 0.8; margin-top: 4px; }
-        .tabs { display: flex; gap: 0; background: #e0e0e0; }
-        .tab { padding: 12px 24px; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.2s; }
-        .tab:hover { background: #d0d0d0; }
-        .tab.active { background: white; border-bottom-color: #1565C0; color: #1565C0; }
-        .content { max-width: 1200px; margin: 20px auto; padding: 0 20px; }
-        .panel { display: none; }
-        .panel.active { display: block; }
-        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .card h3 { margin-bottom: 12px; color: #1565C0; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        .slider-group { margin-bottom: 12px; }
-        .slider-group label { display: block; font-weight: 600; margin-bottom: 4px; font-size: 14px; }
-        .slider-group input[type=range] { width: 100%; }
-        .slider-group .value { float: right; font-weight: 400; color: #1565C0; }
-        .btn { padding: 10px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; transition: all 0.2s; }
-        .btn-primary { background: #1565C0; color: white; }
-        .btn-primary:hover { background: #0D47A1; }
-        .btn-secondary { background: #E0E0E0; color: #333; }
-        .result { margin-top: 16px; padding: 16px; background: #f8f8f8; border-radius: 6px; }
-        .result h4 { margin-bottom: 8px; }
-        .metric { display: inline-block; margin: 4px 8px 4px 0; padding: 6px 12px; background: #E3F2FD; border-radius: 4px; font-size: 13px; }
-        .metric .val { font-weight: 700; color: #1565C0; }
-        .psf-bar { display: inline-block; width: 40px; margin: 0 2px; text-align: center; vertical-align: bottom; }
-        .psf-bar .bar { background: #42A5F5; border-radius: 3px 3px 0 0; }
-        .psf-bar .label { font-size: 10px; color: #888; margin-top: 2px; }
-        .status { padding: 8px 16px; border-radius: 4px; margin: 8px 0; font-size: 13px; }
-        .status.ok { background: #E8F5E9; color: #2E7D32; }
-        .status.error { background: #FFEBEE; color: #C62828; }
-        .status.loading { background: #FFF3E0; color: #E65100; }
-        #psf-chart { height: 200px; display: flex; align-items: flex-end; justify-content: center; gap: 4px; padding: 10px; }
+        :root {
+            --primary: #1565C0;
+            --primary-dark: #0D47A1;
+            --accent: #7B1FA2;
+            --success: #2E7D32;
+            --warning: #E65100;
+            --danger: #C62828;
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --text: #333333;
+            --text-light: #888888;
+            --border: #e0e0e0;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Segoe UI',system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); }
+
+        /* Header */
+        .header { background:linear-gradient(135deg,var(--primary),var(--accent)); color:white; padding:24px 32px; display:flex; justify-content:space-between; align-items:center; }
+        .header h1 { font-size:22px; letter-spacing:-0.5px; }
+        .header .subtitle { font-size:12px; opacity:0.7; margin-top:2px; }
+        .header .status-badge { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; }
+        .status-online { background:rgba(255,255,255,0.2); }
+        .status-offline { background:rgba(255,0,0,0.3); }
+
+        /* Tabs */
+        .tabs { display:flex; background:white; border-bottom:1px solid var(--border); padding:0 20px; }
+        .tab { padding:14px 20px; cursor:pointer; font-weight:600; font-size:14px; color:var(--text-light); border-bottom:3px solid transparent; transition:all 0.2s; }
+        .tab:hover { color:var(--text); }
+        .tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+
+        /* Layout */
+        .content { max-width:1400px; margin:20px auto; padding:0 20px; }
+        .panel { display:none; }
+        .panel.active { display:block; }
+        .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+        .grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+        .grid-4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; }
+
+        /* Card */
+        .card { background:var(--card); border-radius:12px; padding:24px; box-shadow:0 1px 3px rgba(0,0,0,0.08); }
+        .card h3 { font-size:16px; margin-bottom:16px; color:var(--primary); display:flex; align-items:center; gap:8px; }
+        .card h3 .icon { font-size:20px; }
+
+        /* Sliders */
+        .param-group { margin-bottom:16px; }
+        .param-label { display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; }
+        .param-label .name { font-weight:600; }
+        .param-label .val { color:var(--primary); font-weight:700; font-size:14px; }
+        input[type=range] { width:100%; height:6px; -webkit-appearance:none; appearance:none; background:#e0e0e0; border-radius:3px; outline:none; }
+        input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--primary); cursor:pointer; }
+
+        /* Button */
+        .btn { padding:12px 28px; border:none; border-radius:8px; cursor:pointer; font-weight:600; font-size:14px; transition:all 0.2s; }
+        .btn-primary { background:var(--primary); color:white; }
+        .btn-primary:hover { background:var(--primary-dark); transform:translateY(-1px); box-shadow:0 4px 12px rgba(21,101,192,0.3); }
+        .btn-primary:disabled { background:#bbb; cursor:not-allowed; transform:none; box-shadow:none; }
+        .btn-sm { padding:8px 16px; font-size:12px; }
+
+        /* Metrics */
+        .metric-card { background:#f8f9fa; border-radius:8px; padding:16px; text-align:center; }
+        .metric-card .value { font-size:28px; font-weight:700; color:var(--primary); }
+        .metric-card .label { font-size:11px; color:var(--text-light); margin-top:4px; text-transform:uppercase; letter-spacing:0.5px; }
+        .metric-card.good .value { color:var(--success); }
+        .metric-card.warn .value { color:var(--warning); }
+        .metric-card.bad .value { color:var(--danger); }
+
+        /* PSF Chart */
+        .psf-chart { display:flex; align-items:flex-end; justify-content:center; gap:6px; height:180px; padding:16px 0; }
+        .psf-bar-wrap { text-align:center; flex:1; max-width:60px; }
+        .psf-bar { border-radius:4px 4px 0 0; transition:height 0.3s; min-height:2px; }
+        .psf-bar-label { font-size:10px; color:var(--text-light); margin-top:4px; }
+        .psf-bar-val { font-size:9px; color:var(--text-light); margin-bottom:2px; }
+
+        /* Status */
+        .status-msg { padding:10px 16px; border-radius:6px; font-size:13px; margin:12px 0; }
+        .status-ok { background:#E8F5E9; color:var(--success); }
+        .status-err { background:#FFEBEE; color:var(--danger); }
+        .status-loading { background:#FFF3E0; color:var(--warning); }
+
+        /* Pipeline */
+        .pipeline { display:flex; align-items:center; gap:4px; padding:16px 0; flex-wrap:wrap; }
+        .pipe-step { padding:10px 16px; border-radius:8px; font-size:12px; font-weight:600; color:white; text-align:center; min-width:100px; }
+        .pipe-arrow { font-size:18px; color:#bbb; }
+        .pipe-step.done { opacity:0.6; }
+
+        /* Table */
+        .data-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .data-table th { text-align:left; padding:10px 12px; background:#f0f2f5; font-weight:600; border-bottom:2px solid var(--border); }
+        .data-table td { padding:10px 12px; border-bottom:1px solid var(--border); }
+        .data-table tr:hover { background:#f8f9fa; }
+
+        /* Pareto scatter placeholder */
+        .chart-placeholder { background:#f8f9fa; border-radius:8px; height:250px; display:flex; align-items:center; justify-content:center; color:var(--text-light); font-size:14px; }
+
+        @media (max-width:768px) { .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; } }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>UDFPS PINN Design Studio</h1>
-        <p>BM Optical Inverse Design Platform | Phase E</p>
+        <div>
+            <h1>UDFPS PINN Design Studio</h1>
+            <div class="subtitle">BM Optical Inverse Design Platform</div>
+        </div>
+        <div id="conn-status" class="status-badge status-offline">Connecting...</div>
     </div>
 
     <div class="tabs">
-        <div class="tab active" onclick="showTab('inference')">PSF Inference</div>
-        <div class="tab" onclick="showTab('design')">Inverse Design</div>
-        <div class="tab" onclick="showTab('system')">System Status</div>
+        <div class="tab active" onclick="showTab('tab-psf')">PSF Inference</div>
+        <div class="tab" onclick="showTab('tab-design')">Inverse Design</div>
+        <div class="tab" onclick="showTab('tab-overview')">System Overview</div>
     </div>
 
     <div class="content">
-        <!-- Tab 1: PSF Inference -->
-        <div id="inference" class="panel active">
-            <div class="grid">
+
+        <!-- ═══ Tab 1: PSF Inference ═══ -->
+        <div id="tab-psf" class="panel active">
+            <div class="grid-2">
                 <div class="card">
-                    <h3>Design Parameters</h3>
-                    <div class="slider-group">
-                        <label>delta_BM1 <span class="value" id="d1-val">0.0</span> um</label>
-                        <input type="range" id="d1" min="-10" max="10" step="0.5" value="0" oninput="updateSlider('d1')">
+                    <h3><span class="icon">&#9881;</span> Design Parameters</h3>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">delta_BM1 (offset)</span><span class="val" id="v-d1">0.0 um</span></div>
+                        <input type="range" id="s-d1" min="-10" max="10" step="0.5" value="0" oninput="updateParam()">
                     </div>
-                    <div class="slider-group">
-                        <label>delta_BM2 <span class="value" id="d2-val">0.0</span> um</label>
-                        <input type="range" id="d2" min="-10" max="10" step="0.5" value="0" oninput="updateSlider('d2')">
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">delta_BM2 (offset)</span><span class="val" id="v-d2">0.0 um</span></div>
+                        <input type="range" id="s-d2" min="-10" max="10" step="0.5" value="0" oninput="updateParam()">
                     </div>
-                    <div class="slider-group">
-                        <label>w1 (BM1 aperture) <span class="value" id="w1-val">10.0</span> um</label>
-                        <input type="range" id="w1" min="5" max="20" step="0.5" value="10" oninput="updateSlider('w1')">
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">w1 (BM1 aperture)</span><span class="val" id="v-w1">10.0 um</span></div>
+                        <input type="range" id="s-w1" min="5" max="20" step="0.5" value="10" oninput="updateParam()">
                     </div>
-                    <div class="slider-group">
-                        <label>w2 (BM2 aperture) <span class="value" id="w2-val">10.0</span> um</label>
-                        <input type="range" id="w2" min="5" max="20" step="0.5" value="10" oninput="updateSlider('w2')">
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">w2 (BM2 aperture)</span><span class="val" id="v-w2">10.0 um</span></div>
+                        <input type="range" id="s-w2" min="5" max="20" step="0.5" value="10" oninput="updateParam()">
                     </div>
-                    <div class="slider-group">
-                        <label>theta (angle) <span class="value" id="th-val">0</span> deg</label>
-                        <input type="range" id="th" min="0" max="40" step="1" value="0" oninput="updateSlider('th')">
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">theta (angle)</span><span class="val" id="v-th">0 deg</span></div>
+                        <input type="range" id="s-th" min="0" max="40" step="1" value="0" oninput="updateParam()">
                     </div>
-                    <button class="btn btn-primary" onclick="runInference()">Predict PSF</button>
-                </div>
-                <div class="card">
-                    <h3>PSF Result</h3>
-                    <div id="psf-chart"></div>
-                    <div id="psf-metrics"></div>
+                    <button class="btn btn-primary" onclick="runPSF()" id="btn-psf">Predict PSF</button>
                     <div id="psf-status"></div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Tab 2: Inverse Design -->
-        <div id="design" class="panel">
-            <div class="card">
-                <h3>Target Specifications</h3>
-                <div class="grid">
-                    <div class="slider-group">
-                        <label>MTF@ridge min <span class="value" id="mtf-val">0.60</span></label>
-                        <input type="range" id="mtf-min" min="0.1" max="0.95" step="0.05" value="0.60" oninput="updateSlider('mtf-min', 'mtf')">
+                <div>
+                    <div class="card" style="margin-bottom:20px">
+                        <h3><span class="icon">&#9783;</span> PSF 7-Pixel</h3>
+                        <div class="psf-chart" id="psf-chart"></div>
                     </div>
-                    <div class="slider-group">
-                        <label>Skewness max <span class="value" id="skew-val">0.10</span></label>
-                        <input type="range" id="skew-max" min="0.01" max="0.5" step="0.01" value="0.10" oninput="updateSlider('skew-max', 'skew')">
+                    <div class="grid-4" id="psf-metrics">
+                        <div class="metric-card"><div class="value" id="m-mtf">--</div><div class="label">MTF@ridge</div></div>
+                        <div class="metric-card"><div class="value" id="m-skew">--</div><div class="label">Skewness</div></div>
+                        <div class="metric-card"><div class="value" id="m-thru">--</div><div class="label">Throughput</div></div>
+                        <div class="metric-card"><div class="value" id="m-time">--</div><div class="label">Inference</div></div>
                     </div>
                 </div>
-                <button class="btn btn-primary" onclick="runDesign()" id="design-btn">Run Inverse Design</button>
-                <div id="design-status"></div>
-                <div id="design-result"></div>
             </div>
         </div>
 
-        <!-- Tab 3: System -->
-        <div id="system" class="panel">
-            <div class="card">
-                <h3>System Health</h3>
-                <div id="health-info"></div>
-                <button class="btn btn-secondary" onclick="checkHealth()">Refresh</button>
+        <!-- ═══ Tab 2: Inverse Design ═══ -->
+        <div id="tab-design" class="panel">
+            <div class="grid-2">
+                <div class="card">
+                    <h3><span class="icon">&#9733;</span> Target Specifications</h3>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">MTF@ridge minimum</span><span class="val" id="v-mtf-min">0.60</span></div>
+                        <input type="range" id="s-mtf-min" min="0.1" max="0.95" step="0.05" value="0.60" oninput="document.getElementById('v-mtf-min').textContent=this.value">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">Skewness maximum</span><span class="val" id="v-skew-max">0.10</span></div>
+                        <input type="range" id="s-skew-max" min="0.01" max="0.5" step="0.01" value="0.10" oninput="document.getElementById('v-skew-max').textContent=this.value">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label"><span class="name">Iterations</span><span class="val" id="v-iter">30</span></div>
+                        <input type="range" id="s-iter" min="10" max="50" step="5" value="30" oninput="document.getElementById('v-iter').textContent=this.value">
+                    </div>
+                    <button class="btn btn-primary" onclick="runDesign()" id="btn-design">Run Inverse Design</button>
+                    <div id="design-status"></div>
+                </div>
+                <div class="card">
+                    <h3><span class="icon">&#9878;</span> Optimization Result</h3>
+                    <div id="design-result">
+                        <div class="chart-placeholder">Run Inverse Design to see results</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ Tab 3: System Overview ═══ -->
+        <div id="tab-overview" class="panel">
+            <div class="card" style="margin-bottom:20px">
+                <h3><span class="icon">&#9776;</span> Pipeline Architecture</h3>
+                <div class="pipeline">
+                    <div class="pipe-step" style="background:#42A5F5">TMM<br><small>AR Coating</small></div>
+                    <div class="pipe-arrow">&#10132;</div>
+                    <div class="pipe-step" style="background:#66BB6A">ASM<br><small>CG 550um</small></div>
+                    <div class="pipe-arrow">&#10132;</div>
+                    <div class="pipe-step" style="background:#EF5350">PINN<br><small>BM~OPD 40um</small></div>
+                    <div class="pipe-arrow">&#10132;</div>
+                    <div class="pipe-step" style="background:#AB47BC">PSF<br><small>7 Pixels</small></div>
+                    <div class="pipe-arrow">&#10132;</div>
+                    <div class="pipe-step" style="background:#FF7043">FNO<br><small>Surrogate</small></div>
+                    <div class="pipe-arrow">&#10132;</div>
+                    <div class="pipe-step" style="background:#26A69A">BoTorch<br><small>Optimizer</small></div>
+                </div>
+            </div>
+            <div class="grid-3">
+                <div class="card">
+                    <h3>PINN Model</h3>
+                    <div id="sys-pinn">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>FNO Surrogate</h3>
+                    <div id="sys-fno">Loading...</div>
+                </div>
+                <div class="card">
+                    <h3>Physical Constants</h3>
+                    <table class="data-table">
+                        <tr><td>Wavelength</td><td><b>520 nm</b></td></tr>
+                        <tr><td>Cover Glass</td><td><b>550 um, n=1.52</b></td></tr>
+                        <tr><td>BM1 (z=20), BM2 (z=40)</td><td><b>40 um domain</b></td></tr>
+                        <tr><td>OPD Pitch</td><td><b>72 um x 7</b></td></tr>
+                        <tr><td>Wavenumber k</td><td><b>18.37 um<sup>-1</sup></b></td></tr>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
 
-    <script>
-        const API = 'http://localhost:8000';
+<script>
+const API = window.location.origin;
+let apiOnline = false;
 
-        function showTab(name) {
-            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.getElementById(name).classList.add('active');
-            event.target.classList.add('active');
-        }
+function showTab(id) {
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    event.target.classList.add('active');
+}
 
-        function updateSlider(id, valId) {
-            const el = document.getElementById(id);
-            const valEl = document.getElementById((valId || id) + '-val');
-            if (valEl) valEl.textContent = el.value;
-        }
+function updateParam() {
+    document.getElementById('v-d1').textContent = document.getElementById('s-d1').value + ' um';
+    document.getElementById('v-d2').textContent = document.getElementById('s-d2').value + ' um';
+    document.getElementById('v-w1').textContent = document.getElementById('s-w1').value + ' um';
+    document.getElementById('v-w2').textContent = document.getElementById('s-w2').value + ' um';
+    document.getElementById('v-th').textContent = document.getElementById('s-th').value + ' deg';
+}
 
-        async function runInference() {
-            const params = {
-                delta_bm1: parseFloat(document.getElementById('d1').value),
-                delta_bm2: parseFloat(document.getElementById('d2').value),
-                w1: parseFloat(document.getElementById('w1').value),
-                w2: parseFloat(document.getElementById('w2').value),
-                theta_deg: parseFloat(document.getElementById('th').value),
-            };
-            document.getElementById('psf-status').innerHTML = '<div class="status loading">Computing...</div>';
+function renderPSF(psf7, highlight) {
+    const labels = ['R','V','R','V(c)','R','V','R'];
+    const colors = ['#42A5F5','#90CAF9','#42A5F5','#EF5350','#42A5F5','#90CAF9','#42A5F5'];
+    const mx = Math.max(...psf7.map(Math.abs)) || 1;
+    let html = '';
+    psf7.forEach((v, i) => {
+        const h = Math.max(3, (Math.abs(v) / mx) * 140);
+        html += '<div class="psf-bar-wrap">'
+            + '<div class="psf-bar-val">' + v.toExponential(1) + '</div>'
+            + '<div class="psf-bar" style="height:' + h + 'px;background:' + colors[i] + '"></div>'
+            + '<div class="psf-bar-label">' + labels[i] + '</div></div>';
+    });
+    document.getElementById('psf-chart').innerHTML = html;
+}
 
-            try {
-                const r = await fetch(`${API}/api/inference/psf`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({params}),
-                });
-                const d = await r.json();
+function setMetric(id, val, cls) {
+    const el = document.getElementById(id);
+    el.textContent = val;
+    el.parentElement.className = 'metric-card' + (cls ? ' ' + cls : '');
+}
 
-                // PSF bar chart
-                const labels = ['R','V','R','V(c)','R','V','R'];
-                const maxVal = Math.max(...d.psf_7) || 1;
-                let chart = '';
-                d.psf_7.forEach((v, i) => {
-                    const h = Math.max(2, (v / maxVal) * 150);
-                    const color = i === 3 ? '#EF5350' : '#42A5F5';
-                    chart += `<div class="psf-bar"><div class="bar" style="height:${h}px;background:${color}"></div><div class="label">${labels[i]}</div></div>`;
-                });
-                document.getElementById('psf-chart').innerHTML = chart;
+async function runPSF() {
+    const params = {
+        delta_bm1: +document.getElementById('s-d1').value,
+        delta_bm2: +document.getElementById('s-d2').value,
+        w1: +document.getElementById('s-w1').value,
+        w2: +document.getElementById('s-w2').value,
+        theta_deg: +document.getElementById('s-th').value,
+    };
+    document.getElementById('btn-psf').disabled = true;
+    document.getElementById('psf-status').innerHTML = '<div class="status-msg status-loading">Computing...</div>';
 
-                // Metrics
-                document.getElementById('psf-metrics').innerHTML = `
-                    <div class="metric">MTF@ridge: <span class="val">${d.mtf_ridge.toFixed(3)}</span></div>
-                    <div class="metric">Skewness: <span class="val">${d.skewness.toFixed(3)}</span></div>
-                    <div class="metric">Throughput: <span class="val">${d.throughput.toFixed(6)}</span></div>
-                    <div class="metric">Inference: <span class="val">${d.inference_ms.toFixed(0)}ms</span></div>
-                `;
-                document.getElementById('psf-status').innerHTML = '<div class="status ok">Prediction complete</div>';
-            } catch(e) {
-                document.getElementById('psf-status').innerHTML = `<div class="status error">Error: ${e.message}. Is the API server running?</div>`;
-            }
-        }
+    try {
+        const r = await fetch(API + '/api/inference/psf', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({params}),
+        });
+        const d = await r.json();
+        renderPSF(d.psf_7);
+        setMetric('m-mtf', d.mtf_ridge.toFixed(3), d.mtf_ridge > 0.5 ? 'good' : d.mtf_ridge > 0 ? 'warn' : 'bad');
+        setMetric('m-skew', d.skewness.toFixed(3), Math.abs(d.skewness) < 0.1 ? 'good' : 'warn');
+        setMetric('m-thru', d.throughput.toFixed(4));
+        setMetric('m-time', d.inference_ms.toFixed(0) + 'ms');
+        document.getElementById('psf-status').innerHTML = '<div class="status-msg status-ok">Prediction complete</div>';
+    } catch(e) {
+        // Demo mode
+        const demo = [0.05, 0.12, 0.28, 0.85, 0.28, 0.12, 0.05];
+        renderPSF(demo);
+        setMetric('m-mtf', '0.504', 'good');
+        setMetric('m-skew', '0.000', 'good');
+        setMetric('m-thru', '1.750');
+        setMetric('m-time', 'demo');
+        document.getElementById('psf-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
+    }
+    document.getElementById('btn-psf').disabled = false;
+}
 
-        async function runDesign() {
-            document.getElementById('design-status').innerHTML = '<div class="status loading">Running inverse design... (this may take a few minutes)</div>';
-            document.getElementById('design-btn').disabled = true;
+async function runDesign() {
+    document.getElementById('btn-design').disabled = true;
+    document.getElementById('design-status').innerHTML = '<div class="status-msg status-loading">Running BoTorch optimization... (1-5 min)</div>';
 
-            try {
-                const r = await fetch(`${API}/api/design/run`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        spec: {mtf_ridge_min: parseFloat(document.getElementById('mtf-min').value), skewness_max: parseFloat(document.getElementById('skew-max').value)},
-                        n_iterations: 20,
-                    }),
-                });
-                const d = await r.json();
-                document.getElementById('design-status').innerHTML = `<div class="status ok">Complete in ${d.elapsed_sec.toFixed(0)}s (${d.n_evaluations} evaluations)</div>`;
-                document.getElementById('design-result').innerHTML = `
-                    <div class="result">
-                        <h4>Best Design</h4>
-                        <div class="metric">delta_BM1: <span class="val">${d.best.params.delta_bm1.toFixed(1)}</span> um</div>
-                        <div class="metric">delta_BM2: <span class="val">${d.best.params.delta_bm2.toFixed(1)}</span> um</div>
-                        <div class="metric">w1: <span class="val">${d.best.params.w1.toFixed(1)}</span> um</div>
-                        <div class="metric">w2: <span class="val">${d.best.params.w2.toFixed(1)}</span> um</div>
-                        <br>
-                        <div class="metric">MTF: <span class="val">${d.best.mtf_ridge.toFixed(3)}</span></div>
-                        <div class="metric">Skewness: <span class="val">${d.best.skewness.toFixed(3)}</span></div>
-                        <div class="metric">Throughput: <span class="val">${d.best.throughput.toFixed(3)}</span></div>
-                        <p style="margin-top:12px;font-size:13px;color:#888">Pareto front: ${d.pareto_front.length} candidates</p>
-                    </div>
-                `;
-            } catch(e) {
-                document.getElementById('design-status').innerHTML = `<div class="status error">Error: ${e.message}</div>`;
-            }
-            document.getElementById('design-btn').disabled = false;
-        }
+    try {
+        const r = await fetch(API + '/api/design/run', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+                spec: { mtf_ridge_min: +document.getElementById('s-mtf-min').value, skewness_max: +document.getElementById('s-skew-max').value },
+                n_iterations: +document.getElementById('s-iter').value,
+            }),
+        });
+        const d = await r.json();
+        const b = d.best;
+        document.getElementById('design-result').innerHTML = `
+            <div class="grid-4" style="margin-bottom:16px">
+                <div class="metric-card good"><div class="value">${b.mtf_ridge.toFixed(3)}</div><div class="label">MTF</div></div>
+                <div class="metric-card"><div class="value">${b.skewness.toFixed(3)}</div><div class="label">Skewness</div></div>
+                <div class="metric-card"><div class="value">${b.throughput.toFixed(3)}</div><div class="label">Throughput</div></div>
+                <div class="metric-card"><div class="value">${d.elapsed_sec.toFixed(0)}s</div><div class="label">Time</div></div>
+            </div>
+            <h4 style="margin:12px 0 8px">Best Design</h4>
+            <table class="data-table">
+                <tr><th>Parameter</th><th>Value</th><th>Range</th></tr>
+                <tr><td>delta_BM1</td><td><b>${b.params.delta_bm1.toFixed(1)} um</b></td><td>[-10, 10]</td></tr>
+                <tr><td>delta_BM2</td><td><b>${b.params.delta_bm2.toFixed(1)} um</b></td><td>[-10, 10]</td></tr>
+                <tr><td>w1</td><td><b>${b.params.w1.toFixed(1)} um</b></td><td>[5, 20]</td></tr>
+                <tr><td>w2</td><td><b>${b.params.w2.toFixed(1)} um</b></td><td>[5, 20]</td></tr>
+            </table>
+            <p style="margin-top:12px;font-size:12px;color:#888">${d.n_evaluations} evaluations, ${d.pareto_front.length} Pareto candidates</p>
+        `;
+        document.getElementById('design-status').innerHTML = '<div class="status-msg status-ok">Optimization complete</div>';
+    } catch(e) {
+        // Demo result
+        document.getElementById('design-result').innerHTML = `
+            <div class="grid-4" style="margin-bottom:16px">
+                <div class="metric-card good"><div class="value">0.782</div><div class="label">MTF</div></div>
+                <div class="metric-card good"><div class="value">0.045</div><div class="label">Skewness</div></div>
+                <div class="metric-card"><div class="value">0.891</div><div class="label">Throughput</div></div>
+                <div class="metric-card"><div class="value">8.2s</div><div class="label">Time</div></div>
+            </div>
+            <h4 style="margin:12px 0 8px">Best Design (Demo)</h4>
+            <table class="data-table">
+                <tr><th>Parameter</th><th>Value</th><th>Range</th></tr>
+                <tr><td>delta_BM1</td><td><b>+2.3 um</b></td><td>[-10, 10]</td></tr>
+                <tr><td>delta_BM2</td><td><b>-1.5 um</b></td><td>[-10, 10]</td></tr>
+                <tr><td>w1</td><td><b>12.8 um</b></td><td>[5, 20]</td></tr>
+                <tr><td>w2</td><td><b>9.4 um</b></td><td>[5, 20]</td></tr>
+            </table>
+            <p style="margin-top:12px;font-size:12px;color:#888">Demo mode (API offline) - 150 evaluations, 5 Pareto candidates</p>
+        `;
+        document.getElementById('design-status').innerHTML = '<div class="status-msg status-loading">Demo mode (API offline)</div>';
+    }
+    document.getElementById('btn-design').disabled = false;
+}
 
-        async function checkHealth() {
-            try {
-                const r = await fetch(`${API}/api/health`);
-                const d = await r.json();
-                document.getElementById('health-info').innerHTML = `
-                    <div class="metric">Status: <span class="val">${d.status}</span></div>
-                    <div class="metric">PINN: <span class="val">${d.pinn_loaded ? 'Loaded' : 'Not loaded'}</span></div>
-                    <div class="metric">FNO: <span class="val">${d.fno_loaded ? 'Loaded' : 'Not loaded'}</span></div>
-                    <div class="metric">Parameters: <span class="val">${d.n_pinn_params.toLocaleString()}</span></div>
-                    <div class="metric">Device: <span class="val">${d.device}</span></div>
-                `;
-            } catch(e) {
-                document.getElementById('health-info').innerHTML = `<div class="status error">API server not running. Start with: uvicorn backend.api.main:app --port 8000</div>`;
-            }
-        }
+async function checkHealth() {
+    try {
+        const r = await fetch(API + '/api/health');
+        const d = await r.json();
+        apiOnline = true;
+        document.getElementById('conn-status').textContent = 'API Online';
+        document.getElementById('conn-status').className = 'status-badge status-online';
+        document.getElementById('sys-pinn').innerHTML = `
+            <table class="data-table">
+                <tr><td>Status</td><td><b style="color:${d.pinn_loaded?'green':'red'}">${d.pinn_loaded?'Loaded':'Not loaded'}</b></td></tr>
+                <tr><td>Parameters</td><td><b>${d.n_pinn_params.toLocaleString()}</b></td></tr>
+                <tr><td>Device</td><td><b>${d.device}</b></td></tr>
+            </table>`;
+        document.getElementById('sys-fno').innerHTML = `
+            <table class="data-table">
+                <tr><td>Status</td><td><b style="color:${d.fno_loaded?'green':'red'}">${d.fno_loaded?'Loaded':'Not loaded'}</b></td></tr>
+                <tr><td>Speed</td><td><b>~1 ms/query</b></td></tr>
+            </table>`;
+    } catch(e) {
+        document.getElementById('conn-status').textContent = 'Demo Mode';
+        document.getElementById('conn-status').className = 'status-badge status-offline';
+        document.getElementById('sys-pinn').innerHTML = '<div class="status-msg status-loading">API offline. Start: uvicorn backend.api.main:app --port 8000</div>';
+        document.getElementById('sys-fno').innerHTML = '<div class="status-msg status-loading">API offline</div>';
+    }
+}
 
-        // Auto-check on load
-        checkHealth();
-    </script>
+// Init: show demo PSF
+renderPSF([0.05, 0.12, 0.28, 0.85, 0.28, 0.12, 0.05]);
+setMetric('m-mtf', '--');
+setMetric('m-skew', '--');
+setMetric('m-thru', '--');
+setMetric('m-time', '--');
+checkHealth();
+</script>
 </body>
 </html>
