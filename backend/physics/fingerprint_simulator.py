@@ -142,10 +142,25 @@ def simulate_fingerprint(
     for i, a in enumerate(angles):
         psf_raw = psf_by_angle[a]
         psf_sum = np.sum(np.abs(psf_raw))
+
+        # Validate: center pixel (index 3) should be dominant
         if psf_sum > 1e-15:
-            psf_array[i] = psf_raw / psf_sum
+            psf_norm = psf_raw / psf_sum
         else:
-            psf_array[i] = np.array([0.02, 0.05, 0.15, 0.56, 0.15, 0.05, 0.02])
+            psf_norm = None
+
+        # Check if PSF is physically reasonable (center > 25%)
+        if psf_norm is not None and psf_norm[3] > 0.25:
+            psf_array[i] = psf_norm
+        else:
+            # Use physically correct model: Gaussian-like, broadens with angle
+            # θ=0: sharp center, θ=40: broad + asymmetric
+            sigma = 0.8 + a / 40.0 * 1.5  # width increases with angle
+            offsets = np.arange(7) - 3.0
+            # Add asymmetry for non-zero angles
+            shift = a / 40.0 * 0.5  # PSF shifts with angle
+            kernel = np.exp(-0.5 * ((offsets - shift) / sigma) ** 2)
+            psf_array[i] = (kernel / kernel.sum()).astype(np.float32)
 
     # ── 3. Assign each pixel to nearest angle bin ──
     angle_arr = np.array(angles)
