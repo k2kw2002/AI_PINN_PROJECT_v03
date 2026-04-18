@@ -169,7 +169,7 @@
 </div>
 
 <script>
-const API=window.location.origin;
+const API=window.location.protocol==='file:'?'http://127.0.0.1:7777':window.location.origin;
 function tab(id){document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.getElementById(id).classList.add('on');event.target.classList.add('on');}
 function up(){['d1','d2','w1','w2','th'].forEach(k=>{const e=document.getElementById('f-'+k);document.getElementById('f-'+k+'v').textContent=e.value+(k==='th'?' deg':' um');});}
 function psf(el,data){const L=['R','V','R','V(c)','R','V','R'],C=['#42A5F5','#90CAF9','#42A5F5','#EF5350','#42A5F5','#90CAF9','#42A5F5'],mx=Math.max(...data.map(Math.abs))||1;let h='';data.forEach((v,i)=>{const ht=Math.max(3,(Math.abs(v)/mx)*130);h+='<div class="psf-bw"><div class="psf-bv">'+v.toExponential(1)+'</div><div class="psf-b" style="height:'+ht+'px;background:'+C[i]+'"></div><div class="psf-bl">'+L[i]+'</div></div>';});el.innerHTML=h;}

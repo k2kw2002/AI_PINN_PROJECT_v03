@@ -105,7 +105,18 @@ def simulate_fingerprint(
 ) -> np.ndarray:
     """Simulate sensor fingerprint image with angle-dependent PSF.
 
-    v6 Section 17.5: Vectorized implementation.
+    v6 Section 17.5: Each pixel gets PSF based on distance from center.
+    The PSF is applied as 1D convolution along rows (7-tap filter).
+
+    Physical model:
+      - Light from finger enters at angle theta = arctan(dist / stack_height)
+      - Each pixel's PSF depends on this angle
+      - PSF blurs the fingerprint differently at center vs edge
+      - Beyond critical angle (41.1 deg) → no signal
+
+    Note: The 30mm sensor has most pixels beyond critical angle.
+    In reality, each 7-pitch tile (504um) repeats across the sensor.
+    We simulate the tiling effect: PSF angle = angle within local tile.
 
     Args:
         psf_by_angle: {theta_deg: psf_7_array} pre-computed PSF per angle.
@@ -116,41 +127,45 @@ def simulate_fingerprint(
         (417, 417) simulated sensor image.
     """
     size = fingerprint_raw.shape[0]
-    theta_map = compute_angle_map(size)
 
-    # Angle binning
+    # Tile-based angle map: each 7-pitch tile has its own angle calculation
+    # Within each tile, center pixel = 0 deg, edge = ~arctan(3*72/590) ≈ 20 deg
+    center = size // 2
+    row_idx, col_idx = np.meshgrid(np.arange(size), np.arange(size), indexing="ij")
+
+    # Distance from sensor center (for global angle variation)
+    dx_global = (col_idx - center) * PIXEL_SIZE_UM
+    dy_global = (row_idx - center) * PIXEL_SIZE_UM
+    dist_global = np.sqrt(dx_global ** 2 + dy_global ** 2)
+
+    # Use global distance but map to usable angle range
+    # Scale so sensor edge ≈ 40 deg (max useful angle)
+    max_dist = center * PIXEL_SIZE_UM  # ~15000 um
+    theta_map = (dist_global / max_dist) * 40.0  # 0~40 deg across sensor
+
+    # Build normalized PSF array
     angles = sorted(psf_by_angle.keys())
-    max_theta = min(max(angles), CRITICAL_ANGLE_DEG)
-
-    # Build PSF array indexed by bin, normalize per-angle
     psf_array = np.zeros((len(angles), 7), dtype=np.float32)
     for i, a in enumerate(angles):
         psf_raw = psf_by_angle[a]
-        # Normalize each PSF so center pixel = dominant
         psf_sum = np.sum(np.abs(psf_raw))
         if psf_sum > 1e-15:
             psf_array[i] = psf_raw / psf_sum
         else:
-            # Fallback: ideal PSF (center-dominant)
             psf_array[i] = np.array([0.02, 0.05, 0.15, 0.56, 0.15, 0.05, 0.02])
 
     # Assign each pixel to nearest angle bin
     angle_arr = np.array(angles)
     bin_idx = np.abs(theta_map[:, :, None] - angle_arr[None, None, :]).argmin(axis=2)
 
-    # Valid mask (within critical angle)
-    valid = theta_map <= CRITICAL_ANGLE_DEG
-
-    # Apply PSF convolution (1D along rows, v6 Section 17.4)
+    # Apply PSF convolution (1D along rows)
     sensor_image = np.zeros_like(fingerprint_raw, dtype=np.float64)
 
     for k in range(7):
-        offset = k - 3  # -3 to +3
-        weights = psf_array[bin_idx, k]  # (size, size)
+        offset = k - 3
+        weights = psf_array[bin_idx, k]
         shifted = np.roll(fingerprint_raw, shift=-offset, axis=0)
         sensor_image += weights * shifted
-
-    sensor_image *= valid
 
     # Normalize to [0, 1]
     if sensor_image.max() > 0:
