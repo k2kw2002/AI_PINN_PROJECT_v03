@@ -103,20 +103,16 @@ def simulate_fingerprint(
     fingerprint_raw: np.ndarray,
     n_angle_bins: int = 9,
 ) -> np.ndarray:
-    """Simulate sensor fingerprint image with angle-dependent PSF.
+    """Simulate sensor fingerprint image with proper 2D tiling.
 
-    v6 Section 17.5: Each pixel gets PSF based on distance from center.
-    The PSF is applied as 1D convolution along rows (7-tap filter).
+    v6 Section 17: BM structure repeats every 72um in BOTH x and y.
+    PINN gives 1D PSF[7] → 2D PSF = outer product PSF_x × PSF_y (7×7 kernel).
+    Each pixel's angle depends on distance from sensor center.
 
-    Physical model:
-      - Light from finger enters at angle theta = arctan(dist / stack_height)
-      - Each pixel's PSF depends on this angle
-      - PSF blurs the fingerprint differently at center vs edge
-      - Beyond critical angle (41.1 deg) → no signal
-
-    Note: The 30mm sensor has most pixels beyond critical angle.
-    In reality, each 7-pitch tile (504um) repeats across the sensor.
-    We simulate the tiling effect: PSF angle = angle within local tile.
+    Tiling structure (v6 Section 17.7):
+      Sensor 417×417 = 59×59 tiles, each tile = 7 OPD pixels
+      Each tile position → angle θ → PSF[7] at that angle
+      PSF applied as 2D separable convolution (x and y)
 
     Args:
         psf_by_angle: {theta_deg: psf_7_array} pre-computed PSF per angle.
@@ -127,23 +123,20 @@ def simulate_fingerprint(
         (417, 417) simulated sensor image.
     """
     size = fingerprint_raw.shape[0]
-
-    # Tile-based angle map: each 7-pitch tile has its own angle calculation
-    # Within each tile, center pixel = 0 deg, edge = ~arctan(3*72/590) ≈ 20 deg
     center = size // 2
+
+    # ── 1. Angle map: each pixel → θ based on distance from center ──
     row_idx, col_idx = np.meshgrid(np.arange(size), np.arange(size), indexing="ij")
+    dx = (col_idx - center) * PIXEL_SIZE_UM
+    dy = (row_idx - center) * PIXEL_SIZE_UM
+    dist = np.sqrt(dx ** 2 + dy ** 2)
 
-    # Distance from sensor center (for global angle variation)
-    dx_global = (col_idx - center) * PIXEL_SIZE_UM
-    dy_global = (row_idx - center) * PIXEL_SIZE_UM
-    dist_global = np.sqrt(dx_global ** 2 + dy_global ** 2)
+    # OLED distributed illumination: scale angle across sensor
+    # Center = 0°, edge ≈ 40° (max useful angle before TIR)
+    max_dist = center * PIXEL_SIZE_UM
+    theta_map = (dist / max_dist) * 40.0
 
-    # Use global distance but map to usable angle range
-    # Scale so sensor edge ≈ 40 deg (max useful angle)
-    max_dist = center * PIXEL_SIZE_UM  # ~15000 um
-    theta_map = (dist_global / max_dist) * 40.0  # 0~40 deg across sensor
-
-    # Build normalized PSF array
+    # ── 2. Build normalized PSF per angle ──
     angles = sorted(psf_by_angle.keys())
     psf_array = np.zeros((len(angles), 7), dtype=np.float32)
     for i, a in enumerate(angles):
@@ -154,20 +147,28 @@ def simulate_fingerprint(
         else:
             psf_array[i] = np.array([0.02, 0.05, 0.15, 0.56, 0.15, 0.05, 0.02])
 
-    # Assign each pixel to nearest angle bin
+    # ── 3. Assign each pixel to nearest angle bin ──
     angle_arr = np.array(angles)
     bin_idx = np.abs(theta_map[:, :, None] - angle_arr[None, None, :]).argmin(axis=2)
 
-    # Apply PSF convolution (1D along rows)
-    sensor_image = np.zeros_like(fingerprint_raw, dtype=np.float64)
+    # ── 4. 2D Tiling: Apply PSF in BOTH x(col) and y(row) directions ──
+    # Step 4a: 1D convolution along rows (y-direction BM tiling)
+    row_conv = np.zeros_like(fingerprint_raw, dtype=np.float64)
+    for k in range(7):
+        offset = k - 3  # -3 to +3 pixels
+        weights = psf_array[bin_idx, k]  # (417, 417) per-pixel weight
+        shifted = np.roll(fingerprint_raw, shift=-offset, axis=0)  # shift rows
+        row_conv += weights * shifted
 
+    # Step 4b: 1D convolution along columns (x-direction BM tiling)
+    sensor_image = np.zeros_like(row_conv, dtype=np.float64)
     for k in range(7):
         offset = k - 3
         weights = psf_array[bin_idx, k]
-        shifted = np.roll(fingerprint_raw, shift=-offset, axis=0)
+        shifted = np.roll(row_conv, shift=-offset, axis=1)  # shift columns
         sensor_image += weights * shifted
 
-    # Normalize to [0, 1]
+    # ── 5. Normalize to [0, 1] ──
     if sensor_image.max() > 0:
         sensor_image = sensor_image / sensor_image.max()
 
